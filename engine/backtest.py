@@ -67,6 +67,51 @@ def components(df: pd.DataFrame) -> dict[str, tuple[pd.Series, pd.Series]]:
     }
 
 
+def score_v2(d: dict[str, np.ndarray], i: int):
+    """Score révisé d'après le backtest v1 :
+    - MACD : fort (3) seulement quand il croise loin de la tendance (sous zéro à l'achat,
+      au-dessus de zéro à la vente) ; sinon 1 point (il était nuisible en suivi de tendance) ;
+    - death cross retiré (signal de vente contre-productif sur 4 ans) ;
+    - croisement cours / MM200 ramené à 1 point (bruit) ;
+    - stochastique : simple confirmation, ne déclenche plus seul.
+    """
+    g = lambda k, j=i: float(d[k][j])  # noqa: E731
+    ok = S._ok
+    c0, c1, o1 = g("close", i - 1), g("close"), g("open")
+    buy, sell = [], []
+    r0, r1 = g("rsi", i - 1), g("rsi")
+    if ok(r0, r1):
+        if r0 < 30 <= r1: buy.append((2, True))
+        elif r1 < 30: buy.append((1, False))
+        if r0 > 70 >= r1: sell.append((2, True))
+        elif r1 > 70: sell.append((1, False))
+    m0, m1, s0, s1 = g("macd", i - 1), g("macd"), g("macd_sig", i - 1), g("macd_sig")
+    if S.cross_up(m0, m1, s0, s1): buy.append((3 if m1 < 0 else 1, True))
+    if S.cross_down(m0, m1, s0, s1): sell.append((3 if m1 > 0 else 1, True))
+    lo0, lo1, up0, up1 = g("bb_lo", i - 1), g("bb_lo"), g("bb_up", i - 1), g("bb_up")
+    if ok(lo0, lo1):
+        if c0 < lo0 and c1 > lo1: buy.append((2, True))
+        elif c1 < lo1: buy.append((1, False))
+    if ok(up0, up1):
+        if c0 > up0 and c1 < up1: sell.append((2, True))
+        elif c1 > up1: sell.append((1, False))
+    k0, k1, d0, d1 = g("stoch_k", i - 1), g("stoch_k"), g("stoch_d", i - 1), g("stoch_d")
+    if S.cross_up(k0, k1, d0, d1) and min(k0, k1) < 20: buy.append((1, False))
+    if S.cross_down(k0, k1, d0, d1) and max(k0, k1) > 80: sell.append((1, False))
+    a0, a1, b0, b1 = g("sma50", i - 1), g("sma50"), g("sma200", i - 1), g("sma200")
+    if S.cross_up(a0, a1, b0, b1): buy.append((2, True))
+    if S.cross_up(c0, c1, b0, b1): buy.append((1, True))
+    if S.cross_down(c0, c1, b0, b1): sell.append((1, True))
+    if ok(b1):
+        if c1 > b1: buy.append((1, False)); sell.append((-1, False))
+        else: buy.append((-1, False)); sell.append((1, False))
+    vr = g("vol_ratio")
+    if ok(vr) and vr >= 1.5:
+        if c1 > o1 and any(e for _, e in buy): buy.append((1, False))
+        if c1 < o1 and any(e for _, e in sell): sell.append((1, False))
+    return (sum(p for p, _ in buy), any(e for _, e in buy), sum(p for p, _ in sell), any(e for _, e in sell))
+
+
 def with_cooldown(idx: list[int]) -> list[int]:
     out, last = [], -10**9
     for i in idx:
@@ -115,6 +160,17 @@ def run_asset(sym: str, cls: str) -> tuple[list[dict], dict]:
                 if sc >= t and i - last[(side, t)] >= COOLDOWN:
                     last[(side, t)] = i
                     add(i, side, f"conf>={t}")
+
+    last2 = {(side, t): -10**9 for side in ("buy", "sell") for t in (4, 5, 6, 7)}
+    for i in range(201, n):
+        bs, be, ss, se = score_v2(d, i)
+        for side, sc, ev in (("buy", bs, be), ("sell", ss, se)):
+            if not ev:
+                continue
+            for t in (4, 5, 6, 7):
+                if sc >= t and i - last2[(side, t)] >= COOLDOWN:
+                    last2[(side, t)] = i
+                    add(i, side, f"v2>={t}")
 
     base = {}
     for scope, mask in (("y1", one_year & valid), ("all", valid)):
@@ -175,6 +231,19 @@ def main():
       "Signaux espacés d'au moins 3 bougies.\n")
     if errors:
         w("Actifs non chargés : " + ", ".join(errors) + "\n")
+
+    w("\n## Comparaison : score actuel vs score révisé (v2)\n")
+    w("| Période | Horizon | Score | Sens | n | Réussite | Gain | Excès | t |")
+    w("|---|---|---|---|---|---|---|---|---|")
+    for scope, title in (("y1", "1 an"), ("all", "4 ans")):
+        sc = df[df.y1] if scope == "y1" else df
+        bf = {(s, scope, h): bases[(s, scope, h)] for s in df.sym.unique() for h in HORIZONS if (s, scope, h) in bases}
+        for h in (10, 20):
+            for v in ("conf>=4", "conf>=5", "conf>=6", "v2>=4", "v2>=5", "v2>=6", "v2>=7"):
+                for side in ("buy", "sell"):
+                    sub = sc[(sc.variant == v) & (sc.side == side)]
+                    lab = ("actuel " if v.startswith("conf") else "v2 ") + v.split(">=")[1]
+                    w(f"| {title} | {h} | {lab} | {'Achat' if side == 'buy' else 'Vente'} | {fmt(stats(sub, h, bf, scope))} |")
 
     for scope, title in (("y1", "Dernière année"), ("all", "Contrôle sur ~4 ans")):
         sc = df[df.y1] if scope == "y1" else df
