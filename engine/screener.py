@@ -425,7 +425,15 @@ def analyse(asset: dict, prev_state: dict, settings: dict):
     st = dict(prev_state or {})
     alerts = []
 
-    df, cur, long_name, qtype = fetch(sym, tf)
+    used = sym
+    try:
+        df, cur, long_name, qtype = fetch(sym, tf)
+    except RuntimeError:
+        # Yahoo ne cote pas toutes les cryptos en euros : on se rabat sur la paire en dollars.
+        if not sym.endswith("-EUR"):
+            raise
+        used = sym[:-4] + "-USD"
+        df, cur, long_name, qtype = fetch(used, tf)
     is_crypto = (qtype or "").upper() == "CRYPTOCURRENCY" or asset.get("type") == "crypto"
     df = indicators(df)
 
@@ -526,7 +534,7 @@ def analyse(asset: dict, prev_state: dict, settings: dict):
         return float(row[k])
 
     status = {
-        "ok": True, "symbol": sym, "name": name, "long_name": long_name, "currency": cur,
+        "ok": True, "symbol": sym, "source_symbol": used, "name": name, "long_name": long_name, "currency": cur,
         "type": "crypto" if is_crypto else (asset.get("type") or (qtype or "").lower()),
         "tf": tf, "sensitivity": sens, "threshold": thr_b, "threshold_buy": thr_b, "threshold_sell": thr_s, "alert": mode,
         "price": price, "change": (price / prev_close - 1) * 100,
