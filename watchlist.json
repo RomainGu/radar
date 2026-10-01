@@ -212,6 +212,14 @@
       "alert": "both",
       "timeframe": "1d",
       "sensitivity": "normal"
+    },
+    {
+      "symbol": "ACWI.PA",
+      "name": "iShares MSCI ACWI ETF",
+      "type": "etf",
+      "alert": "both",
+      "timeframe": "1d",
+      "sensitivity": "normal"
     }
   ]
 }
