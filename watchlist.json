@@ -52,6 +52,14 @@
       "alert": "both",
       "timeframe": "1d",
       "sensitivity": "normal"
+    },
+    {
+      "symbol": "AVAX-EUR",
+      "name": "Avalanche",
+      "type": "crypto",
+      "alert": "sell",
+      "timeframe": "1d",
+      "sensitivity": "normal"
     }
   ]
 }
