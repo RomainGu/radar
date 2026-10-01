@@ -31,6 +31,7 @@
     --warn:#D9A43A; --needle:#E7ECF0;}
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
 html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 var(--body);-webkit-font-smoothing:antialiased}
 body{min-height:100dvh;padding:calc(var(--safe-t) + 8px) 0 calc(76px + var(--safe-b))}
 button,input,select{font:inherit;color:inherit}
@@ -141,6 +142,25 @@ h2{font:600 13px/1.3 var(--body);color:var(--muted);margin:26px 4px 8px}
 .row2{display:grid;grid-template-columns:1fr 1fr}
 .row2 > .field + .field{border-left:1px solid var(--line)}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.search{position:relative}
+.search input{padding-left:26px!important}
+.search svg{position:absolute;left:0;top:50%;transform:translateY(-50%);width:18px;height:18px;color:var(--muted)}
+.results{margin:4px -16px -11px;border-top:1px solid var(--line)}
+.results:empty{display:none}
+.res{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:none;border:0;padding:11px 16px}
+.res + .res{border-top:1px solid var(--line)}
+.res .grow{flex:1;min-width:0}
+.res b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.res small{display:block;color:var(--muted);font-size:13px}
+.res .tk{font-weight:600;font-size:13px;color:var(--accent);flex:none}
+.res-msg{padding:12px 16px;color:var(--muted);font-size:14px}
+.picked{display:flex;align-items:center;gap:12px;padding:13px 16px}
+.picked .grow{flex:1;min-width:0}
+.picked b{display:block;font:600 17px/1.3 var(--display)}
+.picked small{color:var(--muted);font-size:13px}
+.picked button{border:0;background:none;color:var(--accent);font-weight:600;padding:6px 0}
+details.manual summary{cursor:pointer;color:var(--accent);font-size:14px;font-weight:600;list-style:none;padding:11px 16px}
+details.manual summary::-webkit-details-marker{display:none}
 .chips button{border:1px solid var(--line);background:none;border-radius:999px;padding:3px 10px;font-size:13px;color:var(--muted)}
 .btn{display:block;width:100%;border:0;border-radius:12px;padding:14px;font-weight:600;font-size:16px;background:var(--accent);color:#fff}
 @media (prefers-color-scheme: dark){.btn{color:#0F161D}}
@@ -215,7 +235,7 @@ const SENS_HELP = {
   normal: "Bon équilibre : au moins deux signaux concordants (score ≥ 4).",
   reactif: "Plus d'alertes, plus tôt, mais plus de faux signaux (score ≥ 3)."
 };
-const TYPES = { crypto: "Crypto", action: "Action", etf: "ETF", indice: "Indice", autre: "Autre" };
+const TYPES = { action: "Action", etf: "ETF", crypto: "Crypto", indice: "Indice", matiere: "Matière première", devise: "Devise", fonds: "Fonds", autre: "Autre" };
 
 let cfg = store.get("cfg", { owner: "", repo: "", token: "", demo: false });
 let status = store.get("status", null);          // dernier status.json (cache hors ligne)
@@ -581,6 +601,105 @@ function vSettings() {
   <p class="note" style="margin-top:20px">Radar est un outil d'aide à la décision fondé sur l'analyse technique. Il ne constitue pas un conseil en investissement : aucun indicateur ne garantit le sens du marché.</p>`;
 }
 
+
+/* ---------------------------------------------------------------- recherche d'actifs
+   Yahoo bloque les recherches depuis une page web : on interroge Twelve Data (actions, ETF)
+   et CoinGecko (cryptos), deux API gratuites sans clé, puis on convertit en ticker Yahoo. */
+let srch = { q: "", results: null, loading: false, error: false };
+let srchTimer, srchCtrl;
+const MIC = { // code de place -> [suffixe Yahoo, nom affiché, priorité]
+  XPAR: [".PA", "Euronext Paris", 40], XNAS: ["", "Nasdaq", 36], XNGS: ["", "Nasdaq", 36], XNMS: ["", "Nasdaq", 34], XNCM: ["", "Nasdaq", 30], XNYS: ["", "NYSE", 36], ARCX: ["", "NYSE Arca", 34], BATS: ["", "Cboe US", 30], XASE: ["", "NYSE American", 28],
+  XAMS: [".AS", "Euronext Amsterdam", 26], XBRU: [".BR", "Euronext Bruxelles", 26], XLIS: [".LS", "Euronext Lisbonne", 22], XMSM: [".IR", "Euronext Dublin", 22],
+  XETR: [".DE", "Xetra", 28], XFRA: [".F", "Francfort", 18], XMIL: [".MI", "Milan", 22], XMAD: [".MC", "Madrid", 22], XSWX: [".SW", "SIX Suisse", 22],
+  XLON: [".L", "Londres", 22], XSTO: [".ST", "Stockholm", 18], XCSE: [".CO", "Copenhague", 18], XHEL: [".HE", "Helsinki", 18], XOSL: [".OL", "Oslo", 18],
+  XWBO: [".VI", "Vienne", 16], XTSE: [".TO", "Toronto", 18], XTKS: [".T", "Tokyo", 16], XHKG: [".HK", "Hong Kong", 16], XASX: [".AX", "Sydney", 16]
+};
+const TD_TYPE = { "Common Stock": "action", "Depositary Receipt": "action", "Preferred Stock": "action", "REIT": "action", "ETF": "etf", "Index": "indice" };
+const LOCAL = [ // indices, matières premières et devises : tickers Yahoo directs
+  ["^FCHI", "CAC 40", "indice", "cac40 paris france"], ["^SBF120", "SBF 120", "indice", "france"], ["^STOXX50E", "Euro Stoxx 50", "indice", "eurostoxx europe"],
+  ["^GDAXI", "DAX", "indice", "allemagne germany"], ["^FTSE", "FTSE 100", "indice", "londres uk"], ["^GSPC", "S&P 500", "indice", "sp500 sp 500 snp usa"],
+  ["^IXIC", "Nasdaq Composite", "indice", "nasdaq"], ["^NDX", "Nasdaq 100", "indice", "nasdaq100"], ["^DJI", "Dow Jones", "indice", "dow"],
+  ["^RUT", "Russell 2000", "indice", "russell"], ["^N225", "Nikkei 225", "indice", "japon japan"], ["^HSI", "Hang Seng", "indice", "hong kong chine"],
+  ["^IBEX", "IBEX 35", "indice", "espagne"], ["FTSEMIB.MI", "FTSE MIB", "indice", "italie"], ["^AEX", "AEX", "indice", "amsterdam pays-bas"],
+  ["^SSMI", "SMI", "indice", "suisse"], ["^VIX", "VIX (volatilité)", "indice", "volatilite peur"],
+  ["GC=F", "Or", "matiere", "gold"], ["SI=F", "Argent", "matiere", "silver"], ["BZ=F", "Pétrole Brent", "matiere", "petrole oil brent"],
+  ["CL=F", "Pétrole WTI", "matiere", "petrole oil wti"], ["NG=F", "Gaz naturel", "matiere", "gas"], ["HG=F", "Cuivre", "matiere", "copper"],
+  ["EURUSD=X", "Euro / Dollar", "devise", "eur usd eurusd"], ["EURGBP=X", "Euro / Livre", "devise", "eur gbp"], ["EURCHF=X", "Euro / Franc suisse", "devise", "eur chf"],
+  ["USDJPY=X", "Dollar / Yen", "devise", "usd jpy"]
+];
+const norm = t => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+
+function yahooTicker(sym, mic) {
+  const m = MIC[mic]; if (!m) return null;
+  let s = String(sym).trim();
+  if (m[0] !== "" && s.includes(".")) return null; // codes Twelve Data sans équivalent Yahoo
+  if (mic === "XHKG") s = s.padStart(4, "0");
+  if (m[0] === "") s = s.replace(/\./g, "-"); // BRK.B -> BRK-B
+  return s.replace(/\s+/g, "-") + m[0];
+}
+function scoreText(q, name, sym) {
+  const n = norm(name), sy = norm(sym), qq = norm(q);
+  if (!qq) return 0;
+  if (sy === qq || n === qq) return 20;
+  if (n.startsWith(qq) || sy.startsWith(qq)) return 15;
+  if (n.split(" ").some(w => w.startsWith(qq))) return 10;
+  return n.includes(qq) ? 5 : 0;
+}
+async function searchAssets(q, signal) {
+  const nq = norm(q);
+  const local = LOCAL.filter(([sym, name, , alias]) => (norm(name) + " " + norm(sym) + " " + alias).includes(nq))
+    .map(([sym, name, type]) => ({ symbol: sym, name, type, exch: type === "indice" ? "Indice" : type === "devise" ? "Devise" : "Matière première", score: 55 + scoreText(q, name, sym) }));
+
+  const td = fetch(`https://api.twelvedata.com/symbol_search?outputsize=60&symbol=${encodeURIComponent(q)}`, { signal })
+    .then(r => r.json()).then(j => (j.data || []).map(x => {
+      const type = TD_TYPE[x.instrument_type]; const tk = type && yahooTicker(x.symbol, x.mic_code);
+      if (!tk) return null;
+      // Cotations secondaires (codes « 4xxx » à Milan, « 0xxx » à Londres, certificats) : moins pertinentes
+      const secondary = (x.mic_code === "XMIL" && /^\d/.test(x.symbol)) || (x.mic_code === "XLON" && /^0/.test(x.symbol)) ? 30 : x.instrument_type === "Depositary Receipt" ? 15 : 0;
+      return { symbol: tk, name: x.instrument_name, type, exch: MIC[x.mic_code][1], cur: x.currency, score: MIC[x.mic_code][2] + scoreText(q, x.instrument_name, x.symbol) - secondary };
+    }).filter(Boolean)).catch(e => { if (e.name === "AbortError") throw e; return null; });
+
+  const cg = fetch(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(q)}`, { signal })
+    .then(r => r.json()).then(j => (j.coins || []).filter(c => c.market_cap_rank).slice(0, 6).map(c => ({
+      symbol: c.symbol.toUpperCase() + "-EUR", name: c.name, type: "crypto", exch: "Crypto · en euros", cur: "EUR",
+      score: (c.market_cap_rank && c.market_cap_rank <= 100 ? 45 : c.market_cap_rank && c.market_cap_rank <= 500 ? 25 : 5) + scoreText(q, c.name, c.symbol)
+    }))).catch(e => { if (e.name === "AbortError") throw e; return null; });
+
+  const [a, b] = await Promise.all([td, cg]);
+  if (a === null && b === null && !local.length) throw new Error("indisponible");
+  const seen = new Set(), out = [];
+  for (const r of [...local, ...(a || []), ...(b || [])].sort((x, y) => y.score - x.score)) {
+    if (seen.has(r.symbol)) continue; seen.add(r.symbol); out.push(r);
+    if (out.length >= 10) break;
+  }
+  return out;
+}
+function onSearch(v) {
+  srch.q = v; clearTimeout(srchTimer); srchCtrl?.abort();
+  if (norm(v).length < 2) { srch.results = null; srch.loading = false; paintResults(); return; }
+  srch.loading = true; paintResults();
+  srchTimer = setTimeout(async () => {
+    srchCtrl = new AbortController();
+    try { srch.results = await searchAssets(v.trim(), srchCtrl.signal); srch.error = false; }
+    catch (e) { if (e.name === "AbortError") return; srch.results = []; srch.error = true; }
+    srch.loading = false; paintResults();
+  }, 350);
+}
+function resultsHTML() {
+  if (srch.loading && !srch.results) return `<div class="res-msg">Recherche…</div>`;
+  if (srch.error) return `<div class="res-msg">Recherche indisponible pour l'instant. Saisis le ticker à la main ci-dessous.</div>`;
+  if (!srch.results) return "";
+  if (!srch.results.length) return `<div class="res-msg">Aucun résultat. Essaie le nom complet, le ticker, ou saisis-le à la main.</div>`;
+  return srch.results.map((r, i) => `<button type="button" class="res" onclick="pickResult(${i})"><div class="grow"><b>${esc(r.name)}</b><small>${TYPES[r.type]} · ${esc(r.exch)}${r.cur && r.type !== "crypto" ? " · " + esc(r.cur) : ""}</small></div><span class="tk">${esc(r.symbol)}</span></button>`).join("");
+}
+function paintResults() { const el = $("#results"); if (el) el.innerHTML = resultsHTML(); }
+function pickResult(i) {
+  const r = srch.results?.[i]; if (!r) return;
+  Object.assign(draft, { symbol: r.symbol, name: r.name, type: r.type, exch: r.exch });
+  srch = { q: "", results: null, loading: false, error: false };
+  renderEditor();
+}
+
 /* ---------------------------------------------------------------- éditeur */
 let draft = null, draftOrig = null;
 function openEditor(sym) {
@@ -588,9 +707,10 @@ function openEditor(sym) {
   const ex = sym ? list.find(a => a.symbol.toUpperCase() === sym.toUpperCase()) : null;
   draftOrig = ex ? ex.symbol : null;
   draft = ex ? { ...ex } : { symbol: "", name: "", type: "action", alert: "both", timeframe: "1d", sensitivity: "normal" };
+  srch = { q: "", results: null, loading: false, error: false };
   renderEditor();
   $("#sheet").classList.add("open"); $("#sheetBg").classList.add("open");
-  setTimeout(() => !ex && $("#f-sym")?.focus(), 320);
+  setTimeout(() => !ex && $("#f-q")?.focus(), 320);
 }
 function closeEditor() { $("#sheet").classList.remove("open"); $("#sheetBg").classList.remove("open"); }
 function segHTML(key, map, cls = "") {
@@ -598,16 +718,24 @@ function segHTML(key, map, cls = "") {
 }
 function renderEditor() {
   const d = draft, num = v => v ?? "";
-  const ex = { "BTC-EUR": "crypto", "ETH-EUR": "crypto", "SOL-EUR": "crypto", "AIR.PA": "action", "AAPL": "action", "CW8.PA": "etf", "^FCHI": "indice" };
   $("#sheet").innerHTML = `
   <header><button onclick="closeEditor()">Annuler</button><b id="sheetTitle">${draftOrig ? "Modifier" : "Nouvel actif"}</b><button class="strong" onclick="saveDraft()">Enregistrer</button></header>
+  ${d.symbol ? `<div class="group"><div class="picked"><div class="grow"><b>${esc(d.name || d.symbol)}</b><small>${esc(d.symbol)} · ${TYPES[d.type] || "Autre"}${d.exch ? " · " + esc(d.exch) : ""}</small></div>${draftOrig ? "" : `<button type="button" onclick="draft.symbol='';draft.name='';delete draft.exch;renderEditor();setTimeout(()=>$('#f-q')?.focus(),50)">Changer</button>`}</div></div>` : `
   <div class="group">
-    <div class="field"><label for="f-sym">Symbole Yahoo Finance</label><input id="f-sym" value="${esc(d.symbol)}" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="ex. MC.PA" oninput="draft.symbol=this.value.trim().toUpperCase()">
-      <div class="chips">${Object.entries(ex).map(([k, t]) => `<button type="button" onclick="draft.symbol='${k}';draft.type='${t}';renderEditor()">${k}</button>`).join("")}</div>
-      <div class="help">Paris : suffixe .PA (AIR.PA). Francfort : .DE. Cryptos : BTC-EUR ou BTC-USD. Indices : ^FCHI, ^GSPC. Vérifie sur finance.yahoo.com.</div></div>
+    <div class="field search"><label for="f-q">Rechercher un actif</label>
+      <div style="position:relative"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input id="f-q" type="search" enterkeyhint="search" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Nom ou ticker : LVMH, Apple, Bitcoin, CAC 40…" value="${esc(srch.q)}" oninput="onSearch(this.value)"></div>
+      <div class="results" id="results">${resultsHTML()}</div>
+    </div>
+  </div>`}
+
+  <details class="manual"${d.symbol && !d.exch && !draftOrig ? " open" : ""}${draftOrig ? " open" : ""}><summary>${d.symbol ? "Modifier le ticker, le nom ou la classe" : "Saisir le ticker à la main"}</summary>
+  <div class="group">
+    <div class="field"><label for="f-sym">Ticker Yahoo Finance</label><input id="f-sym" value="${esc(d.symbol)}" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="ex. MC.PA" onchange="draft.symbol=this.value.trim().toUpperCase();delete draft.exch;renderEditor()">
+      <div class="help">Paris : suffixe .PA (AIR.PA). Francfort : .DE. Cryptos : BTC-EUR. Indices : ^FCHI, ^GSPC.</div></div>
     <div class="field"><label for="f-name">Nom affiché</label><input id="f-name" value="${esc(d.name)}" placeholder="ex. LVMH" oninput="draft.name=this.value"></div>
-    <div class="field"><label for="f-type">Type</label><select id="f-type" onchange="draft.type=this.value">${Object.entries(TYPES).map(([k, l]) => `<option value="${k}" ${d.type === k ? "selected" : ""}>${l}</option>`).join("")}</select></div>
-  </div>
+    <div class="field"><label for="f-type">Classe d'actif</label><select id="f-type" onchange="draft.type=this.value;renderEditor()">${Object.entries(TYPES).map(([k, l]) => `<option value="${k}" ${d.type === k ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+  </div></details>
 
   <h2>M'alerter pour</h2>
   <div class="group"><div class="field">${segHTML("alert", { buy: "Achat", sell: "Vente", both: "Les deux", off: "Pause" })}
@@ -641,7 +769,7 @@ async function saveDraft() {
   const list = watch.data.assets ||= [];
   const dup = list.find(a => a.symbol.toUpperCase() === d.symbol && a.symbol !== draftOrig);
   if (dup) { toast(`${d.symbol} est déjà dans ta liste.`); return; }
-  const clean = Object.fromEntries(Object.entries(d).filter(([, v]) => v !== null && v !== "" && v !== undefined));
+  const clean = Object.fromEntries(Object.entries(d).filter(([k, v]) => k !== "exch" && v !== null && v !== "" && v !== undefined));
   const idx = list.findIndex(a => a.symbol === draftOrig);
   if (idx >= 0) list[idx] = clean; else list.push(clean);
   closeEditor();
