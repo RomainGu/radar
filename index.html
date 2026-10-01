@@ -138,6 +138,18 @@ button.pill.f-baissier[aria-pressed="true"] b{color:var(--sell)}
 .alert .w{color:var(--muted);font-size:13px}
 .alert pre{white-space:pre-wrap;font:14px/1.45 var(--body);margin:6px 0 0;color:var(--ink)}
 .empty{padding:28px 20px;text-align:center;color:var(--muted)}
+.hchart{width:100%;height:170px;display:block}
+.hrow{display:flex;align-items:center;gap:12px;padding:11px 16px;width:100%;text-align:left;background:none;border:0}
+.hrow .tag{flex:none;width:30px;height:30px;border-radius:15px;display:grid;place-items:center;font-size:13px;font-weight:700}
+.hrow .tag.buy{background:var(--buy-soft);color:var(--buy)} .hrow .tag.sell{background:var(--sell-soft);color:var(--sell)}
+.hrow .grow{flex:1;min-width:0}
+.hrow .grow b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hrow .grow small{display:block;color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hrow .hres{flex:none;text-align:right;font-weight:600;font-size:15px}
+.hrow .hres small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+.good{color:var(--buy)} .bad{color:var(--sell)}
+.hsum{display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px 4px}
+.hsum .pill{background:var(--sunk)}
 .empty b{display:block;color:var(--ink);font:600 18px/1.3 var(--display);margin-bottom:4px}
 
 /* ---------- formulaires */
@@ -322,7 +334,7 @@ function demo() {
     const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
     for (let i = 0; i < 90; i++) { p *= 1 + (rnd() - .5) * vol + drift; spark.push(p); }
     const prev = spark[88], price = spark[89];
-    return {
+    const o = {
       ok: true, symbol: sym, name, currency: cur, type, tf, sensitivity: sens, threshold_buy: { prudent: 6, normal: 6, reactif: 5 }[sens], threshold_sell: { prudent: 6, normal: 5, reactif: 4 }[sens], alert: mode,
       price, change: (price / prev - 1) * 100, bar: new Date().toISOString(), bias: opts.bias || "neutre",
       score_buy: opts.sb ?? 1, score_sell: opts.ss ?? -1, event_buy: !!opts.eb, event_sell: !!opts.es,
@@ -331,14 +343,18 @@ function demo() {
       range: { high: Math.max(...spark) * 1.04, low: Math.min(...spark) * .9, pos: opts.pos ?? 62, from_high: opts.fh ?? -8.4 },
       position: opts.entry ? { entry: opts.entry, pnl: (price / opts.entry - 1) * 100 } : null,
       backtest: { horizon: 20, horizon_label: "20 séances", baseline: 1.6, buy: { n: opts.bn ?? 9, win: opts.bw ?? 67, avg: opts.ba ?? 4.2 }, sell: { n: 7, win: 57, avg: -1.9 } },
-      spark, updated: new Date().toISOString()
+      spark, updated: new Date().toISOString(),
+      curve: (() => { const out = [[Math.floor(Date.now() / 60000), price]]; let q = price; const now = out[0][0]; for (let i = 1; i <= 250; i++) { q /= 1 + (rnd() - .5) * vol + drift; out.unshift([now - i * 1440 * 1.45, +q.toPrecision(6)]); } return out; })(),
+      history: opts.hist || []
     };
+    o.history.forEach(h => { const k = Math.floor(new Date(h.t).getTime() / 60000); let best = o.curve[0]; for (const p of o.curve) if (Math.abs(p[0] - k) < Math.abs(best[0] - k)) best = p; h.price = best[1]; });
+    return o;
   };
   const a = {
-    "BTC-EUR": mk("BTC-EUR", "Bitcoin", "EUR", 52000, .05, .001, "crypto", "both", "1d", "normal", { bias: "haussier", sb: 6, eb: true, rsi: 34, pctb: .08, pos: 41, fh: -18.2, rb: ["RSI sort de la survente (34)", "Réintègre la bande de Bollinger basse", "Tendance de fond haussière (au-dessus de la MM200)"], bn: 14, bw: 71, ba: 6.8 }),
+    "BTC-EUR": mk("BTC-EUR", "Bitcoin", "EUR", 52000, .05, .001, "crypto", "both", "1d", "normal", { bias: "haussier", sb: 6, eb: true, rsi: 34, pctb: .08, pos: 41, fh: -18.2, rb: ["RSI sort de la survente (34)", "Réintègre la bande de Bollinger basse", "Tendance de fond haussière (au-dessus de la MM200)"], bn: 14, bw: 71, ba: 6.8, hist: [{ t: new Date(Date.now() - 3 * 86400e3).toISOString(), side: "buy", score: 6, ret: 0.012, done: false, why: ["RSI sort de la survente (34)", "Réintègre la bande de Bollinger basse"] }, { t: new Date(Date.now() - 96 * 86400e3).toISOString(), side: "sell", score: 5, ret: -0.084, done: true, why: ["RSI sort du surachat (69)", "MACD croise sa ligne de signal à la baisse"] }, { t: new Date(Date.now() - 181 * 86400e3).toISOString(), side: "buy", score: 7, ret: 0.112, done: true, why: ["MACD croise sa ligne de signal à la hausse", "Golden cross : MM50 passe au-dessus de la MM200"] }, { t: new Date(Date.now() - 290 * 86400e3).toISOString(), side: "sell", score: 5, ret: 0.031, done: true, why: ["Réintègre la bande de Bollinger haute"] }] }),
     "ETH-EUR": mk("ETH-EUR", "Ethereum", "EUR", 2300, .06, -.001, "crypto", "buy", "1d", "normal", { bias: "baissier", sb: 0, ss: 3, rsi: 41, d200: 1.08, pos: 22, fh: -36, rb: ["Contre-tendance : sous la MM200"], rs: ["MACD croise sa ligne de signal à la baisse", "Tendance de fond baissière (sous la MM200)"] }),
     "CW8.PA": mk("CW8.PA", "Amundi MSCI World", "EUR", 520, .012, .0007, "etf", "buy", "1d", "prudent", { bias: "haussier", sb: 2, rsi: 61, pos: 91, fh: -1.2, entry: 470 }),
-    "MC.PA": mk("MC.PA", "LVMH", "EUR", 640, .022, -.0004, "action", "both", "1d", "normal", { bias: "neutre", sb: 1, ss: 5, es: true, rsi: 72, pctb: 1.05, d200: .99, pos: 58, rs: ["RSI sort du surachat (68)", "Réintègre la bande de Bollinger haute", "MACD croise sa ligne de signal à la baisse", "Contre-tendance : le fond reste haussier"] }),
+    "MC.PA": mk("MC.PA", "LVMH", "EUR", 640, .022, -.0004, "action", "both", "1d", "normal", { bias: "neutre", sb: 1, ss: 5, es: true, rsi: 72, pctb: 1.05, d200: .99, pos: 58, rs: ["RSI sort du surachat (68)", "Réintègre la bande de Bollinger haute", "MACD croise sa ligne de signal à la baisse", "Contre-tendance : le fond reste haussier"], hist: [{ t: new Date(Date.now() - 1 * 86400e3).toISOString(), side: "sell", score: 5, ret: -0.004, done: false, why: ["RSI sort du surachat (68)", "Réintègre la bande de Bollinger haute"] }, { t: new Date(Date.now() - 140 * 86400e3).toISOString(), side: "buy", score: 6, ret: -0.027, done: true, why: ["RSI sort de la survente (31)"] }] }),
     "^FCHI": mk("^FCHI", "CAC 40", "EUR", 7600, .012, .0002, "indice", "both", "1wk", "normal", { bias: "haussier", sb: 1, ss: 0, rsi: 57, pos: 74 })
   };
   const now = Date.now();
@@ -526,6 +542,7 @@ function vAsset(sym) {
   </div>
   <p class="verdict">${verdict}</p>
   <div class="group" style="margin-top:12px;padding:18px 16px 10px">${baro(s, true)}</div>
+  ${histSection(s)}
 
   <h2>Ce qui pousse vers l'achat</h2><div class="group">${reasons(s.reasons_buy)}</div>
   <h2>Ce qui pousse vers la vente</h2><div class="group">${reasons(s.reasons_sell)}</div>
@@ -556,19 +573,87 @@ function vAsset(sym) {
   <div style="margin-top:24px">${wa ? `<button class="btn ghost" onclick="openEditor('${esc(sym)}')">Modifier les alertes de cet actif</button>` : ""}</div>`;
 }
 
+
+/* ---------------------------------------------------------------- historique 1 an */
+const HZ = { "4h": "5 j", "1d": "20 séances", "1wk": "8 sem." };
+function histOutcome(h) {
+  const good = h.side === "buy" ? h.ret > 0 : h.ret < 0;
+  return { good, txt: pct(h.ret * 100) };
+}
+function histRow(h, s, withName = false) {
+  const o = histOutcome(h), d = new Date(h.t);
+  const date = d.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "2-digit" });
+  const why = (h.why || []).join(" · ");
+  return `<button class="hrow" onclick="go('#asset/${encodeURIComponent(s.symbol)}')">
+    <span class="tag ${h.side}" aria-hidden="true">${h.side === "buy" ? "A" : "V"}</span>
+    <span class="grow" title="${esc(why)}"><b>${withName ? esc(s.name) + " · " : ""}${h.side === "buy" ? "Achat" : "Vente"}</b><small>${date} · ${money(h.price, s.currency)} · score ${h.score}</small></span>
+    <span class="hres num ${h.done ? (o.good ? "good" : "bad") : ""}">${o.txt}<small>${h.done ? "à " + (HZ[s.tf] || "20 séances") : "en cours"}</small></span></button>`;
+}
+function histStats(list) {
+  const done = list.filter(h => h.done);
+  const wins = done.filter(h => histOutcome(h).good).length;
+  const avg = done.length ? done.reduce((a, h) => a + (h.side === "buy" ? h.ret : -h.ret), 0) / done.length * 100 : null;
+  return { n: list.length, done: done.length, wins, avg };
+}
+function histChart(curve, hist, cur) {
+  if (!curve || curve.length < 2) return "";
+  const W = 340, Hh = 170, pad = 14;
+  const t0 = curve[0][0], t1 = curve[curve.length - 1][0];
+  const ys = curve.map(p => p[1]), mn = Math.min(...ys), mx = Math.max(...ys), rg = mx - mn || 1;
+  const X = t => pad + (t - t0) / ((t1 - t0) || 1) * (W - 2 * pad), Y = v => Hh - pad - (v - mn) / rg * (Hh - 2 * pad);
+  const d = curve.map((p, i) => (i ? "L" : "M") + X(p[0]).toFixed(1) + " " + Y(p[1]).toFixed(1)).join("");
+  const marks = (hist || []).map(h => {
+    const t = Math.floor(new Date(h.t).getTime() / 60000); if (t < t0) return "";
+    const x = X(t), y = Y(h.price);
+    return h.side === "buy"
+      ? `<path d="M${x} ${y + 4}l-6 10h12z" fill="var(--buy)"><title>Achat ${esc(new Date(h.t).toLocaleDateString("fr-FR"))}</title></path>`
+      : `<path d="M${x} ${y - 4}l-6 -10h12z" fill="var(--sell)"><title>Vente ${esc(new Date(h.t).toLocaleDateString("fr-FR"))}</title></path>`;
+  }).join("");
+  const lbl = (v, y) => `<text x="${W - 2}" y="${y}" text-anchor="end" font-size="10" fill="var(--muted)">${esc(money(v, cur))}</text>`;
+  return `<svg class="hchart" viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none" role="img" aria-label="Cours sur un an avec ${(hist || []).length} signaux">
+    <path d="${d}" fill="none" stroke="var(--muted)" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>${marks}${lbl(mx, 11)}${lbl(mn, Hh - 3)}</svg>`;
+}
+function histSection(s) {
+  const hist = s.history;
+  if (!hist) return "";
+  const st = histStats(hist);
+  const sum = hist.length ? `<div class="hsum"><span class="pill"><b>${st.n}</b> ${st.n > 1 ? "signaux" : "signal"}</span>${st.done ? `<span class="pill"><b>${st.wins}/${st.done}</b> gagnants</span><span class="pill"><b class="${st.avg >= 0 ? "good" : "bad"}">${pct(st.avg)}</b> en moyenne</span>` : ""}</div>` : "";
+  return `<h2>Signaux sur un an</h2>
+  <div class="group">${sum}<div style="padding:4px 8px 6px">${histChart(s.curve, hist, s.currency)}</div>
+    ${hist.length ? hist.map(h => histRow(h, s)).join("") : `<div class="empty" style="padding:16px 20px"><b>Aucun signal sur un an</b>Avec ton réglage actuel, Radar n'aurait rien envoyé sur cet actif.</div>`}</div>
+  <p class="note">Signaux que Radar aurait envoyés avec ton réglage actuel (${MODE[s.alert || "both"].toLowerCase()}, ${(SENS[s.sensitivity] || "Normal").toLowerCase()}). Résultat : variation du cours après ${HZ[s.tf] || "20 séances"} ; pour une vente, une baisse compte comme un succès.</p>`;
+}
+
 function vAlerts() {
-  const f = store.get("afilter", "all");
-  const list = (status?.history || []).filter(a => f === "all" || a.side === f);
+  const f = store.get("afilter", "all"), view = store.get("aview", "recues");
   store.set("seen", status?.history?.[0]?.at || null); badge();
+  const views = `<div class="seg" role="group" aria-label="Vue" style="margin:4px 0 8px">${[["recues", "Reçues"], ["histo", "Historique 1 an"]].map(([k, l]) => `<button aria-pressed="${view === k}" onclick="store.set('aview','${k}');render()">${l}</button>`).join("")}</div>`;
+  const seg = `<div class="seg" role="group" aria-label="Filtrer">${[["all", "Toutes"], ["buy", "Achats"], ["sell", "Ventes"]].map(([k, l]) => `<button aria-pressed="${f === k}" onclick="store.set('afilter','${k}');render()">${l}</button>`).join("")}</div>`;
+  const top = `<div class="top"><div><h1>Alertes</h1><p class="sub">${view === "histo" ? "Ce que Radar aurait envoyé sur un an" : "Les 150 dernières"}</p></div>${refreshBtn}</div>`;
+
+  if (view === "histo") {
+    const items = [];
+    Object.values(status?.assets || {}).forEach(s => (s.history || []).forEach(h => { if (f === "all" || h.side === f) items.push([h, s]); }));
+    items.sort((a, b) => b[0].t.localeCompare(a[0].t));
+    const st = histStats(items.map(x => x[0]));
+    const groups = {};
+    items.forEach(x => { const m = new Date(x[0].t).toLocaleDateString("fr-FR", { month: "long", year: "numeric" }); (groups[m] ||= []).push(x); });
+    const sum = items.length ? `<div class="pulse" style="margin-top:12px"><span class="pill"><b>${st.n}</b> ${st.n > 1 ? "signaux" : "signal"}</span>${st.done ? `<span class="pill"><b>${st.wins}/${st.done}</b> gagnants</span><span class="pill"><b class="${st.avg >= 0 ? "good" : "bad"}">${pct(st.avg)}</b> en moyenne</span>` : ""}</div>` : "";
+    const body = items.length ? Object.entries(groups).map(([m, arr]) => `<h2>${cap(m)}</h2><div class="group">${arr.map(([h, s]) => histRow(h, s, true)).join("")}</div>`).join("")
+      : `<div class="group" style="margin-top:16px"><div class="empty"><b>${status ? "Aucun signal sur un an" : "Historique en préparation"}</b>${status ? "Avec tes réglages actuels, Radar n'aurait rien envoyé sur cette période." : "Il apparaît après la prochaine analyse."}</div></div>`;
+    return top + views + seg + sum + body + (items.length ? `<p class="note">Rejoué avec tes réglages actuels. Un signal « en cours » n'a pas encore atteint son horizon de mesure. Les résultats passés ne préjugent pas des résultats futurs.</p>` : "");
+  }
+
+  const list = (status?.history || []).filter(a => f === "all" || a.side === f);
   const groups = {};
   list.forEach(a => { const d = new Date(a.at).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }); (groups[d] ||= []).push(a); });
-  const seg = `<div class="seg" role="group" aria-label="Filtrer" style="margin:4px 0 0">${[["all", "Toutes"], ["buy", "Achats"], ["sell", "Ventes"]].map(([k, l]) => `<button aria-pressed="${f === k}" onclick="store.set('afilter','${k}');render()">${l}</button>`).join("")}</div>`;
   const body = list.length ? Object.entries(groups).map(([d, arr]) => `<h2>${cap(d)}</h2><div class="group">${arr.map(a => `
       <details class="alert ${a.side}"><summary style="list-style:none;cursor:pointer"><div class="t">${esc(a.title)}</div><div class="w">${new Date(a.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} · ${a.kind === "signal" ? "signal technique" : a.kind === "stop" ? "stop" : "niveau de prix"}</div></summary><pre>${esc(a.body)}</pre>
       <button class="linkbtn" style="padding:8px 0 0" onclick="go('#asset/${encodeURIComponent(a.symbol)}')">Voir l'actif</button></details>`).join("")}</div>`).join("")
-    : `<div class="group" style="margin-top:16px"><div class="empty"><b>Aucune alerte ${f === "buy" ? "d'achat " : f === "sell" ? "de vente " : ""}pour l'instant</b>Elles apparaissent ici en même temps que la notification sur ton téléphone.</div></div>`;
-  return `<div class="top"><div><h1>Alertes</h1><p class="sub">Les 150 dernières</p></div>${refreshBtn}</div>${seg}${body}`;
+    : `<div class="group" style="margin-top:16px"><div class="empty"><b>Aucune alerte ${f === "buy" ? "d'achat " : f === "sell" ? "de vente " : ""}reçue pour l'instant</b>Elles apparaissent ici en même temps que la notification sur ton téléphone. L'historique sur un an montre ce que Radar aurait envoyé.</div></div>`;
+  return top + views + seg + body;
 }
+
 
 function vAssets() {
   const list = watch?.data?.assets || [];
