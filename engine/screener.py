@@ -44,8 +44,10 @@ APP_URL = os.environ.get("APP_URL", "").strip()
 TEST_NOTIF = os.environ.get("TEST_NOTIF", "").lower() in ("1", "true", "yes")
 DRY_RUN = os.environ.get("DRY_RUN", "").lower() in ("1", "true", "yes")
 
-# Seuil de déclenchement selon la sensibilité choisie pour l'actif
-THRESHOLDS = {"prudent": 5, "normal": 4, "reactif": 3}
+# Seuils de déclenchement (achat, vente) selon la sensibilité choisie pour l'actif.
+# Calibrés par backtest (36 actifs, 1 an + 4 ans) : en dessous de 6 à l'achat et de 5 à la vente,
+# les signaux ne faisaient pas mieux que la tendance normale des actifs.
+THRESHOLDS = {"prudent": (6, 6), "normal": (6, 5), "reactif": (5, 4)}
 # Nombre de bougies minimum entre deux alertes de même sens sur un actif
 COOLDOWN_BARS = 3
 # Horizon du backtest (en bougies) selon l'unité de temps
@@ -340,7 +342,7 @@ def bias_of(row) -> tuple[str, int]:
     return label, pts
 
 
-def backtest(d: dict[str, np.ndarray], n: int, tf: str, threshold: int):
+def backtest(d: dict[str, np.ndarray], n: int, tf: str, thresholds: tuple[int, int]):
     """Rejoue le signal sur l'historique : que s'est-il passé H bougies après chaque signal ?"""
     H = HORIZON[tf]
     close = d["close"]
@@ -349,7 +351,7 @@ def backtest(d: dict[str, np.ndarray], n: int, tf: str, threshold: int):
     start = 201 if n > 260 else 30
     for i in range(start, n):
         bs, _, be, ss, _, se = score_at(d, i)
-        for side, sc, ev in (("buy", bs, be), ("sell", ss, se)):
+        for side, sc, ev, threshold in (("buy", bs, be, thresholds[0]), ("sell", ss, se, thresholds[1])):
             if ev and sc >= threshold and i - last[side] >= COOLDOWN_BARS:
                 last[side] = i
                 if i + H < n:
@@ -418,7 +420,7 @@ def analyse(asset: dict, prev_state: dict, settings: dict):
     if tf not in TF_DELTA:
         tf = "1d"
     sens = asset.get("sensitivity", "normal")
-    thr = THRESHOLDS.get(sens, 4)
+    thr_b, thr_s = THRESHOLDS.get(sens, THRESHOLDS["normal"])
     mode = asset.get("alert", "both")
     st = dict(prev_state or {})
     alerts = []
@@ -438,7 +440,7 @@ def analyse(asset: dict, prev_state: dict, settings: dict):
     bs, br, be, ss, sr, se = score_at(d, i)
     row = df.iloc[i]
     bias, bias_pts = bias_of(row)
-    bt = backtest(d, n_closed, tf, thr)
+    bt = backtest(d, n_closed, tf, (thr_b, thr_s))
 
     bar_ts = df.index[i].isoformat()
     atr = float(row["atr"]) if _ok(float(row["atr"])) else None
@@ -467,6 +469,7 @@ def analyse(asset: dict, prev_state: dict, settings: dict):
         if mode not in (side, "both"):
             continue
         key = f"last_{side}"
+        thr = thr_b if side == "buy" else thr_s
         if ev and sc >= thr and st.get(key) != bar_ts and bars_since(st.get(key)) >= COOLDOWN_BARS:
             st[key] = bar_ts
             strength = "fort" if sc >= thr + 2 else "modéré"
@@ -525,7 +528,7 @@ def analyse(asset: dict, prev_state: dict, settings: dict):
     status = {
         "ok": True, "symbol": sym, "name": name, "long_name": long_name, "currency": cur,
         "type": "crypto" if is_crypto else (asset.get("type") or (qtype or "").lower()),
-        "tf": tf, "sensitivity": sens, "threshold": thr, "alert": mode,
+        "tf": tf, "sensitivity": sens, "threshold": thr_b, "threshold_buy": thr_b, "threshold_sell": thr_s, "alert": mode,
         "price": price, "change": (price / prev_close - 1) * 100,
         "bar": bar_ts, "bar_closed": bool(closed_mask[-1]),
         "bias": bias, "bias_pts": bias_pts,
