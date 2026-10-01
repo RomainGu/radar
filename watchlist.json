@@ -145,7 +145,7 @@
       "symbol": "RI.PA",
       "name": "Pernod Ricard SA",
       "type": "action",
-      "alert": "both",
+      "alert": "sell",
       "timeframe": "1d",
       "sensitivity": "normal"
     }
