@@ -204,6 +204,14 @@
       "alert": "sell",
       "timeframe": "1d",
       "sensitivity": "normal"
+    },
+    {
+      "symbol": "CW8.PA",
+      "name": "Amundi MSCI World Swap UCITS ETF EUR Acc",
+      "type": "etf",
+      "alert": "both",
+      "timeframe": "1d",
+      "sensitivity": "normal"
     }
   ]
 }
