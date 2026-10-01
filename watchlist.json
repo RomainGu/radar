@@ -17,7 +17,7 @@
       "symbol": "ETH-EUR",
       "name": "Ethereum",
       "type": "crypto",
-      "alert": "buy",
+      "alert": "sell",
       "timeframe": "1d",
       "sensitivity": "normal"
     },
