@@ -67,7 +67,7 @@
       "type": "crypto",
       "alert": "sell",
       "timeframe": "1d",
-      "sensitivity": "normal"
+      "sensitivity": "reactif"
     },
     {
       "symbol": "NEAR-EUR",
