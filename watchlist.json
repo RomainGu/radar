@@ -161,7 +161,7 @@
       "symbol": "KER.PA",
       "name": "Kering SA",
       "type": "action",
-      "alert": "both",
+      "alert": "sell",
       "timeframe": "1d",
       "sensitivity": "normal"
     }
