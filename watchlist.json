@@ -36,6 +36,14 @@
       "alert": "both",
       "timeframe": "1d",
       "sensitivity": "normal"
+    },
+    {
+      "symbol": "RENDER-EUR",
+      "name": "Render",
+      "type": "crypto",
+      "alert": "both",
+      "timeframe": "1d",
+      "sensitivity": "normal"
     }
   ]
 }
