@@ -22,12 +22,12 @@
       "sensitivity": "normal"
     },
     {
-      "symbol": "CW8.PA",
-      "name": "Amundi MSCI World",
-      "type": "etf",
-      "alert": "buy",
+      "symbol": "XLM-EUR",
+      "name": "Stellar",
+      "type": "crypto",
+      "alert": "both",
       "timeframe": "1d",
-      "sensitivity": "prudent"
+      "sensitivity": "normal"
     },
     {
       "symbol": "MC.PA",
