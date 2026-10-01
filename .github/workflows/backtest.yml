@@ -2,6 +2,12 @@ name: Radar — backtest
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "Quel test lancer"
+        type: choice
+        options: [indicateurs, classes]
+        default: classes
 
 permissions:
   contents: read
@@ -9,7 +15,7 @@ permissions:
 jobs:
   backtest:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -18,9 +24,15 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - name: Backtest des indicateurs
+        if: ${{ github.event.inputs.mode == 'indicateurs' }}
         env:
           BT_OUT: bt-out
         run: python engine/backtest.py
+      - name: Réglages par classe d'actif (hors échantillon)
+        if: ${{ github.event.inputs.mode != 'indicateurs' }}
+        env:
+          BT_OUT: bt-out
+        run: python engine/backtest_classes.py
       - uses: actions/upload-artifact@v4
         with:
           name: backtest
