@@ -84,6 +84,14 @@
       "alert": "both",
       "timeframe": "1d",
       "sensitivity": "normal"
+    },
+    {
+      "symbol": "PE500.PA",
+      "name": "Amundi PEA S&P 500 Screened UCITS ETF - Acc",
+      "type": "etf",
+      "alert": "both",
+      "timeframe": "1d",
+      "sensitivity": "normal"
     }
   ]
 }
