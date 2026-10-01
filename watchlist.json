@@ -68,6 +68,14 @@
       "alert": "sell",
       "timeframe": "1d",
       "sensitivity": "normal"
+    },
+    {
+      "symbol": "NEAR-EUR",
+      "name": "NEAR Protocol",
+      "type": "crypto",
+      "alert": "sell",
+      "timeframe": "1d",
+      "sensitivity": "normal"
     }
   ]
 }
