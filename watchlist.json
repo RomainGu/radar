@@ -27,7 +27,7 @@
       "type": "crypto",
       "alert": "both",
       "timeframe": "1d",
-      "sensitivity": "normal"
+      "sensitivity": "reactif"
     },
     {
       "symbol": "LINK-EUR",
