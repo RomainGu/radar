@@ -22,14 +22,6 @@
       "sensitivity": "normal"
     },
     {
-      "symbol": "XLM-EUR",
-      "name": "Stellar",
-      "type": "crypto",
-      "alert": "both",
-      "timeframe": "1d",
-      "sensitivity": "normal"
-    },
-    {
       "symbol": "MC.PA",
       "name": "LVMH",
       "type": "action",
