@@ -1,0 +1,61 @@
+name: Radar — analyse et alertes
+
+on:
+  schedule:
+    - cron: "7,37 * * * *"   # toutes les 30 min (GitHub peut décaler de quelques minutes)
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "Envoyer une notification de test"
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths: [watchlist.json]  # relance immédiate quand tu modifies ta liste depuis l'appli
+
+permissions:
+  contents: write
+
+concurrency:
+  group: radar
+  cancel-in-progress: false
+
+jobs:
+  analyse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Récupérer l'état précédent (branche data)
+        run: |
+          mkdir -p data-branch
+          git fetch --depth=1 origin data 2>/dev/null && git show origin/data:status.json > data-branch/status.json || echo "Premier lancement"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Analyse des actifs
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          APP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+          TEST_NOTIF: ${{ github.event.inputs.test }}
+          STATE_IN: data-branch/status.json
+          STATUS_OUT: out/status.json
+        run: python engine/screener.py
+
+      - name: Publier status.json sur la branche data
+        run: |
+          cd out
+          git init -q -b data
+          git config user.name "radar-bot"
+          git config user.email "radar-bot@users.noreply.github.com"
+          git add status.json
+          git commit -q -m "Mise à jour $(date -u +%FT%TZ)"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data

@@ -1,0 +1,713 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Radar</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Radar">
+<meta name="theme-color" content="#EDF0F3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F161D" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EDF0F3; --surface:#FFFFFF; --sunk:#E3E8ED; --ink:#16212C; --muted:#66737F; --line:#D7DDE3;
+  --buy:#1E7A5A; --buy-soft:#DDEFE7; --sell:#B4432F; --sell-soft:#F6E1DC; --accent:#2F44A0; --accent-soft:#E2E6F6;
+  --warn:#9A6A0C; --needle:#16212C;
+  --display:"Bricolage Grotesque", ui-rounded, -apple-system, system-ui, sans-serif;
+  --body:-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+  --safe-b:env(safe-area-inset-bottom, 0px); --safe-t:env(safe-area-inset-top, 0px);
+}
+@media (prefers-color-scheme: dark){
+  :root{--bg:#0F161D; --surface:#18212A; --sunk:#26313B; --ink:#E7ECF0; --muted:#8C99A5; --line:#26313B;
+    --buy:#3FB58A; --buy-soft:#173328; --sell:#E06A52; --sell-soft:#3A1F19; --accent:#8C9EF0; --accent-soft:#222B4A;
+    --warn:#D9A43A; --needle:#E7ECF0;}
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 var(--body);-webkit-font-smoothing:antialiased}
+body{min-height:100dvh;padding:calc(var(--safe-t) + 8px) 0 calc(76px + var(--safe-b))}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.num{font-variant-numeric:tabular-nums}
+main{max-width:640px;margin:0 auto;padding:0 16px}
+
+/* ---------- en-têtes */
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:18px 4px 10px}
+h1{font:700 34px/1.05 var(--display);letter-spacing:-.02em;margin:0}
+h2{font:600 13px/1.3 var(--body);color:var(--muted);margin:26px 4px 8px}
+.sub{color:var(--muted);font-size:14px;margin:2px 4px 0}
+.iconbtn{width:40px;height:40px;border-radius:20px;border:0;background:var(--surface);display:grid;place-items:center;color:var(--accent)}
+.iconbtn svg{width:20px;height:20px}
+.iconbtn.spin svg{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- listes groupées */
+.group{background:var(--surface);border-radius:14px;overflow:hidden}
+.group > * + *{border-top:1px solid var(--line)}
+.cell{display:flex;align-items:center;gap:12px;padding:13px 16px;min-height:48px;width:100%;text-align:left;background:none;border:0}
+.cell .grow{flex:1;min-width:0}
+.cell small{display:block;color:var(--muted);font-size:13px}
+.chev{color:var(--muted);flex:none}
+
+/* ---------- carte actif (Marché) */
+.asset{display:block;width:100%;text-align:left;background:none;border:0;padding:14px 16px 16px}
+.a-row{display:flex;align-items:baseline;gap:10px}
+.a-name{font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.a-sym{color:var(--muted);font-size:13px;font-weight:400;margin-left:6px}
+.a-price{font:600 17px/1.2 var(--display)}
+.a-meta{display:flex;align-items:center;gap:10px;margin-top:3px;font-size:13px;color:var(--muted)}
+.chg.up{color:var(--buy)} .chg.down{color:var(--sell)}
+.bias{font-weight:600}
+.bias.haussier{color:var(--buy)} .bias.baissier{color:var(--sell)}
+.a-body{display:grid;grid-template-columns:1fr 92px;gap:14px;align-items:end;margin-top:12px}
+.spark{width:92px;height:34px;display:block}
+.flag{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-size:13px;font-weight:600;padding:4px 10px;border-radius:999px}
+.flag.buy{background:var(--buy-soft);color:var(--buy)} .flag.sell{background:var(--sell-soft);color:var(--sell)}
+.flag.err{background:var(--sunk);color:var(--warn)}
+
+/* ---------- baromètre : l'élément signature */
+.baro{position:relative;height:40px}
+.baro .track{position:absolute;left:0;right:0;top:26px;height:6px;border-radius:3px;background:var(--sunk)}
+.baro .fill{position:absolute;top:26px;height:6px;border-radius:3px}
+.baro .fill.buy{background:var(--buy)} .baro .fill.sell{background:var(--sell)}
+.baro .mid{position:absolute;left:50%;top:21px;width:1px;height:16px;background:var(--muted);opacity:.5}
+.baro .thr{position:absolute;top:24px;width:2px;height:10px;border-radius:1px;background:var(--muted);opacity:.55}
+.baro .needle{position:absolute;top:18px;width:4px;height:22px;margin-left:-2px;border-radius:2px;background:var(--needle);box-shadow:0 0 0 2px var(--surface);transition:left .5s cubic-bezier(.2,.8,.2,1)}
+.baro .lbl{position:absolute;top:0;font-size:11px;font-weight:600;letter-spacing:.01em}
+.baro .lbl.l{left:0;color:var(--buy)} .baro .lbl.r{right:0;color:var(--sell)}
+.baro.big{height:54px}
+.baro.big .track,.baro.big .fill{top:32px;height:8px;border-radius:4px}
+.baro.big .mid{top:26px;height:20px} .baro.big .thr{top:30px;height:12px}
+.baro.big .needle{top:22px;height:28px;width:5px}
+.baro.big .lbl{top:0;font-size:13px}
+
+/* ---------- résumé */
+.pulse{display:flex;gap:8px;flex-wrap:wrap;margin:6px 4px 0}
+.pill{font-size:13px;padding:5px 11px;border-radius:999px;background:var(--surface);color:var(--muted)}
+.pill b{color:var(--ink);font-weight:600}
+
+/* ---------- détail */
+.back{display:inline-flex;align-items:center;gap:4px;border:0;background:none;color:var(--accent);padding:10px 0;font-size:16px}
+.hero{padding:6px 4px 4px}
+.hero .p{font:700 40px/1.05 var(--display);letter-spacing:-.02em}
+.hero .n{font:600 22px/1.2 var(--display)}
+.chart{width:100%;height:150px;display:block;margin-top:14px}
+.verdict{font:500 19px/1.35 var(--display);margin:14px 4px 0}
+.reasons{margin:0;padding:12px 16px 14px 34px}
+.reasons li{margin:3px 0}
+.reasons li::marker{color:var(--muted)}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:12px 16px}
+.kv .k{color:var(--muted)} .kv .v{text-align:right}
+.kv .v small{display:block;color:var(--muted);font-size:12.5px}
+.range{position:relative;height:8px;border-radius:4px;background:var(--sunk);margin:8px 0 4px}
+.range i{position:absolute;top:-4px;width:4px;height:16px;border-radius:2px;background:var(--accent);margin-left:-2px}
+.stat3{display:grid;grid-template-columns:repeat(3,1fr)}
+.stat3 > div{padding:12px 14px}
+.stat3 > div + div{border-left:1px solid var(--line)}
+.stat3 b{display:block;font:600 20px/1.2 var(--display)}
+.stat3 span{font-size:12.5px;color:var(--muted)}
+.note{font-size:13px;color:var(--muted);margin:8px 4px 0}
+
+/* ---------- alertes */
+.seg{display:flex;background:var(--sunk);border-radius:10px;padding:2px;gap:2px}
+.seg button{flex:1;white-space:nowrap;border:0;background:none;padding:7px 4px;border-radius:8px;font-size:14px;font-weight:500;color:var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--surface);box-shadow:0 1px 2px rgba(20,30,40,.15);font-weight:600}
+.seg.buy button[aria-pressed="true"]{color:var(--buy)}
+.alert{position:relative;padding:13px 16px 13px 20px}
+.alert::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:4px;border-radius:0 3px 3px 0;background:var(--muted)}
+.alert.buy::before{background:var(--buy)} .alert.sell::before{background:var(--sell)}
+.alert .t{font-weight:600}
+.alert .w{color:var(--muted);font-size:13px}
+.alert pre{white-space:pre-wrap;font:14px/1.45 var(--body);margin:6px 0 0;color:var(--ink)}
+.empty{padding:28px 20px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--ink);font:600 18px/1.3 var(--display);margin-bottom:4px}
+
+/* ---------- formulaires */
+.field{padding:11px 16px}
+.field label{display:block;font-size:13px;color:var(--muted);margin-bottom:4px}
+.field input,.field select{width:100%;border:0;background:none;padding:2px 0;font-size:17px;outline:none}
+.field select{-webkit-appearance:none;appearance:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%2366737F' stroke-width='2'/%3E%3C/svg%3E") right center no-repeat}
+.field input::placeholder{color:var(--muted);opacity:.6}
+.field .help{font-size:12.5px;color:var(--muted);margin-top:6px}
+.field .seg{margin-top:2px}
+.row2{display:grid;grid-template-columns:1fr 1fr}
+.row2 > .field + .field{border-left:1px solid var(--line)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.chips button{border:1px solid var(--line);background:none;border-radius:999px;padding:3px 10px;font-size:13px;color:var(--muted)}
+.btn{display:block;width:100%;border:0;border-radius:12px;padding:14px;font-weight:600;font-size:16px;background:var(--accent);color:#fff}
+@media (prefers-color-scheme: dark){.btn{color:#0F161D}}
+.btn.ghost{background:var(--surface);color:var(--accent)}
+.btn.danger{background:var(--surface);color:var(--sell)}
+.btn + .btn{margin-top:10px}
+.linkbtn{border:0;background:none;color:var(--accent);font-weight:600;padding:13px 16px;width:100%;text-align:left;font-size:16px}
+
+/* ---------- feuille modale */
+.sheet-bg{position:fixed;inset:0;background:rgba(10,15,20,.38);opacity:0;pointer-events:none;transition:opacity .25s;z-index:20}
+.sheet{position:fixed;left:0;right:0;bottom:0;max-height:92dvh;overflow:auto;background:var(--bg);border-radius:16px 16px 0 0;
+  transform:translateY(102%);transition:transform .32s cubic-bezier(.2,.8,.2,1);z-index:21;padding:0 16px calc(24px + var(--safe-b))}
+.sheet.open{transform:none} .sheet-bg.open{opacity:1;pointer-events:auto}
+.sheet header{position:sticky;top:0;background:var(--bg);display:flex;align-items:center;justify-content:space-between;padding:14px 0 10px;z-index:1}
+.sheet header b{font:700 18px/1.2 var(--display)}
+.sheet header button{border:0;background:none;color:var(--accent);font-size:16px;padding:6px 0}
+.sheet header button.strong{font-weight:700}
+@media (min-width:700px){.sheet{left:50%;width:640px;margin-left:-320px}}
+
+/* ---------- barre d'onglets */
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:10;display:flex;justify-content:center;
+  background:color-mix(in srgb, var(--bg) 82%, transparent);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  border-top:1px solid var(--line);padding:6px 8px calc(6px + var(--safe-b))}
+nav.tabs .in{display:flex;width:100%;max-width:640px}
+nav.tabs a{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 0;font-size:11px;font-weight:500;color:var(--muted);text-decoration:none;position:relative}
+nav.tabs a svg{width:25px;height:25px}
+nav.tabs a[aria-current="page"]{color:var(--accent)}
+nav.tabs .badge{position:absolute;top:0;left:calc(50% + 6px);min-width:17px;height:17px;border-radius:9px;background:var(--sell);color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center;padding:0 4px}
+
+.toast{position:fixed;left:50%;bottom:calc(88px + var(--safe-b));transform:translate(-50%,20px);opacity:0;background:var(--ink);color:var(--bg);
+  padding:10px 16px;border-radius:12px;font-size:14px;font-weight:500;transition:.25s;z-index:30;max-width:calc(100% - 32px);text-align:center}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.banner{background:var(--accent-soft);color:var(--ink);border-radius:12px;padding:11px 14px;font-size:14px;margin:10px 0 0}
+.banner.warn{background:var(--sell-soft)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<main id="view" aria-live="polite"></main>
+
+<nav class="tabs" aria-label="Navigation">
+  <div class="in">
+    <a href="#marche" data-tab="marche"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16a8 8 0 0 1 16 0"/><path d="M12 16l4-5"/><circle cx="12" cy="16" r="1.4" fill="currentColor"/></svg>Marché</a>
+    <a href="#alertes" data-tab="alertes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>Alertes<span class="badge" id="badge" hidden></span></a>
+    <a href="#actifs" data-tab="actifs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg>Mes actifs</a>
+    <a href="#reglages" data-tab="reglages"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Réglages</a>
+  </div>
+</nav>
+
+<div class="sheet-bg" id="sheetBg"></div>
+<section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle"></section>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   Radar — appli iPhone (PWA). Lit status.json produit par le moteur,
+   modifie watchlist.json via l'API GitHub. Aucun serveur à toi.
+   ===================================================================== */
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("radar." + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("radar." + k, JSON.stringify(v)); } catch {} }
+};
+
+const TF = { "4h": "4 h", "1d": "Jour", "1wk": "Semaine" };
+const MODE = { buy: "Achat", sell: "Vente", both: "Les deux", off: "Pause" };
+const SENS = { prudent: "Prudent", normal: "Normal", reactif: "Réactif" };
+const SENS_HELP = {
+  prudent: "Moins d'alertes, seulement quand plusieurs indicateurs concordent fortement (score ≥ 5).",
+  normal: "Bon équilibre : au moins deux signaux concordants (score ≥ 4).",
+  reactif: "Plus d'alertes, plus tôt, mais plus de faux signaux (score ≥ 3)."
+};
+const TYPES = { crypto: "Crypto", action: "Action", etf: "ETF", indice: "Indice", autre: "Autre" };
+
+let cfg = store.get("cfg", { owner: "", repo: "", token: "", demo: false });
+let status = store.get("status", null);          // dernier status.json (cache hors ligne)
+let watch = store.get("watch", null);            // { data, sha }
+let lastRun = null;
+let loading = false;
+
+/* ---------------------------------------------------------------- format */
+const nf = (x, d) => x == null || isNaN(x) ? "—" : new Intl.NumberFormat("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d }).format(x);
+function decs(x) { const a = Math.abs(x); return a >= 10000 ? 0 : a >= 1 ? 2 : a >= 0.01 ? 4 : 6; }
+function money(x, cur) {
+  if (x == null || isNaN(x)) return "—";
+  const d = decs(x);
+  if (cur && /^[A-Z]{3}$/.test(cur)) {
+    try { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: cur, minimumFractionDigits: d, maximumFractionDigits: d }).format(x); } catch {}
+  }
+  return nf(x, d) + (cur ? " " + cur : "");
+}
+const pct = (x, d = 1) => x == null || isNaN(x) ? "—" : (x > 0 ? "+" : x < 0 ? "−" : "") + nf(Math.abs(x), d) + " %";
+function ago(iso) {
+  if (!iso) return "jamais";
+  const m = Math.round((Date.now() - new Date(iso)) / 60000);
+  if (m < 1) return "à l'instant";
+  if (m < 60) return `il y a ${m} min`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `il y a ${h} h`;
+  return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+}
+const when = iso => new Date(iso).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+/* ---------------------------------------------------------------- GitHub */
+const gh = {
+  base() { return `https://api.github.com/repos/${cfg.owner}/${cfg.repo}`; },
+  async req(path, opt = {}) {
+    const r = await fetch(this.base() + path, {
+      cache: "no-store", ...opt,
+      headers: { Authorization: `Bearer ${cfg.token}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", ...(opt.headers || {}) }
+    });
+    if (!r.ok) {
+      const msg = { 401: "Jeton GitHub refusé : vérifie-le dans Réglages.", 403: "Accès refusé : le jeton n'a pas les droits nécessaires sur ce dépôt.", 404: "Introuvable : vérifie le nom d'utilisateur et du dépôt.", 409: "Conflit : la liste a changé ailleurs, réessaie.", 422: "Requête refusée par GitHub." }[r.status];
+      const e = new Error(msg || `Erreur GitHub ${r.status}`); e.status = r.status; throw e;
+    }
+    return r.status === 204 ? null : r;
+  },
+  async status() {
+    const r = await this.req("/contents/status.json?ref=data", { headers: { Accept: "application/vnd.github.raw+json" } });
+    return r.json();
+  },
+  async watchlist() {
+    const j = await (await this.req("/contents/watchlist.json?ref=main")).json();
+    const bytes = Uint8Array.from(atob(j.content.replace(/\n/g, "")), c => c.charCodeAt(0));
+    return { data: JSON.parse(new TextDecoder().decode(bytes)), sha: j.sha };
+  },
+  async saveWatchlist(data, sha, message) {
+    const txt = JSON.stringify(data, null, 2) + "\n";
+    const b64 = btoa(String.fromCharCode(...new TextEncoder().encode(txt)));
+    const j = await (await this.req("/contents/watchlist.json", { method: "PUT", body: JSON.stringify({ message, content: b64, sha, branch: "main" }) })).json();
+    return j.content.sha;
+  },
+  async run(test = false) {
+    await this.req("/actions/workflows/radar.yml/dispatches", { method: "POST", body: JSON.stringify({ ref: "main", inputs: { test: test ? "true" : "false" } }) });
+  },
+  async lastRun() {
+    const j = await (await this.req("/actions/workflows/radar.yml/runs?per_page=1")).json();
+    return j.workflow_runs?.[0] || null;
+  }
+};
+const connected = () => cfg.demo || (cfg.owner && cfg.repo && cfg.token);
+
+/* ---------------------------------------------------------------- démo */
+function demo() {
+  const mk = (sym, name, cur, p0, vol, drift, type, mode, tf, sens, opts = {}) => {
+    let p = p0; const spark = [];
+    let seed = [...sym].reduce((a, c) => a + c.charCodeAt(0), 0);
+    const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+    for (let i = 0; i < 90; i++) { p *= 1 + (rnd() - .5) * vol + drift; spark.push(p); }
+    const prev = spark[88], price = spark[89];
+    return {
+      ok: true, symbol: sym, name, currency: cur, type, tf, sensitivity: sens, threshold: { prudent: 5, normal: 4, reactif: 3 }[sens], alert: mode,
+      price, change: (price / prev - 1) * 100, bar: new Date().toISOString(), bias: opts.bias || "neutre",
+      score_buy: opts.sb ?? 1, score_sell: opts.ss ?? -1, event_buy: !!opts.eb, event_sell: !!opts.es,
+      reasons_buy: opts.rb || ["Tendance de fond haussière (au-dessus de la MM200)"], reasons_sell: opts.rs || ["Contre-tendance : le fond reste haussier"],
+      ind: { rsi: opts.rsi ?? 52, macd: .4, macd_sig: .3, macd_hist: .1, sma50: price * .97, sma200: price * (opts.d200 ?? .92), pctb: opts.pctb ?? .55, stoch_k: 48, stoch_d: 45, atr: price * .021, atr_pct: 2.1, vol_ratio: 1.1, dist_sma200: (1 / (opts.d200 ?? .92) - 1) * 100 },
+      range: { high: Math.max(...spark) * 1.04, low: Math.min(...spark) * .9, pos: opts.pos ?? 62, from_high: opts.fh ?? -8.4 },
+      position: opts.entry ? { entry: opts.entry, pnl: (price / opts.entry - 1) * 100 } : null,
+      backtest: { horizon: 20, horizon_label: "20 séances", baseline: 1.6, buy: { n: opts.bn ?? 9, win: opts.bw ?? 67, avg: opts.ba ?? 4.2 }, sell: { n: 7, win: 57, avg: -1.9 } },
+      spark, updated: new Date().toISOString()
+    };
+  };
+  const a = {
+    "BTC-EUR": mk("BTC-EUR", "Bitcoin", "EUR", 52000, .05, .001, "crypto", "both", "1d", "normal", { bias: "haussier", sb: 5, eb: true, rsi: 34, pctb: .08, pos: 41, fh: -18.2, rb: ["RSI sort de la survente (34)", "Réintègre la bande de Bollinger basse", "Tendance de fond haussière (au-dessus de la MM200)"], bn: 14, bw: 71, ba: 6.8 }),
+    "ETH-EUR": mk("ETH-EUR", "Ethereum", "EUR", 2300, .06, -.001, "crypto", "buy", "1d", "normal", { bias: "baissier", sb: 0, ss: 3, rsi: 41, d200: 1.08, pos: 22, fh: -36, rb: ["Contre-tendance : sous la MM200"], rs: ["MACD croise sa ligne de signal à la baisse", "Tendance de fond baissière (sous la MM200)"] }),
+    "CW8.PA": mk("CW8.PA", "Amundi MSCI World", "EUR", 520, .012, .0007, "etf", "buy", "1d", "prudent", { bias: "haussier", sb: 2, rsi: 61, pos: 91, fh: -1.2, entry: 470 }),
+    "MC.PA": mk("MC.PA", "LVMH", "EUR", 640, .022, -.0004, "action", "both", "1d", "normal", { bias: "neutre", sb: 1, ss: 4, es: true, rsi: 72, pctb: 1.05, d200: .99, pos: 58, rs: ["RSI sort du surachat (68)", "Réintègre la bande de Bollinger haute", "MACD croise sa ligne de signal à la baisse", "Contre-tendance : le fond reste haussier"] }),
+    "^FCHI": mk("^FCHI", "CAC 40", "EUR", 7600, .012, .0002, "indice", "both", "1wk", "normal", { bias: "haussier", sb: 1, ss: 0, rsi: 57, pos: 74 })
+  };
+  const now = Date.now();
+  return {
+    status: {
+      updated: new Date(now - 11 * 60000).toISOString(), assets: a, pending: [], channels: { ntfy: true },
+      history: [
+        { symbol: "BTC-EUR", name: "Bitcoin", side: "buy", kind: "signal", at: new Date(now - 3 * 3600e3).toISOString(), title: "ACHAT · Bitcoin (BTC-EUR)", body: "Signal modéré · score 5 · bougie jour\nClôture 49 870,00 €\n• RSI sort de la survente (34)\n• Réintègre la bande de Bollinger basse\n• Tendance de fond haussière (au-dessus de la MM200)\nStop indicatif : 47 650,00 € (2 × ATR)\nHistorique : 71 % de réussite à 20 séances sur 14 signaux (moyenne +6,8 %)." },
+        { symbol: "MC.PA", name: "LVMH", side: "sell", kind: "signal", at: new Date(now - 26 * 3600e3).toISOString(), title: "VENTE · LVMH (MC.PA)", body: "Signal modéré · score 4 · bougie jour\nClôture 662,40 €\n• RSI sort du surachat (68)\n• Réintègre la bande de Bollinger haute\n• MACD croise sa ligne de signal à la baisse\n• Contre-tendance : le fond reste haussier\nInvalidation si retour au-dessus de 690,10 €\nHistorique : 57 % de réussite à 20 séances sur 7 signaux (moyenne −1,9 %)." },
+        { symbol: "CW8.PA", name: "Amundi MSCI World", side: "buy", kind: "target", at: new Date(now - 5 * 86400e3).toISOString(), title: "Zone d'achat atteinte · Amundi MSCI World (CW8.PA)", body: "Cours 498,20 € · niveau fixé 500,00 €" }
+      ]
+    },
+    watch: { sha: "demo", data: { settings: { digest_hour: 8, quiet_start: 22, quiet_end: 7 }, assets: Object.values(a).map(x => ({ symbol: x.symbol, name: x.name, type: x.type, alert: x.alert, timeframe: x.tf, sensitivity: x.sensitivity, ...(x.position ? { entry: x.position.entry } : {}) })) } }
+  };
+}
+
+/* ---------------------------------------------------------------- chargement */
+async function refresh({ quiet = false } = {}) {
+  if (!connected() || loading) return;
+  loading = true; spin(true);
+  try {
+    if (cfg.demo) {
+      const d = demo(); status = d.status; if (!watch || watch.sha !== "demo") watch = d.watch;
+    } else {
+      const [s, w, run] = await Promise.allSettled([gh.status(), gh.watchlist(), gh.lastRun()]);
+      if (w.status === "fulfilled") { watch = w.value; store.set("watch", watch); } else throw w.reason;
+      if (s.status === "fulfilled") { status = s.value; store.set("status", status); }
+      else if (s.reason?.status !== 404) throw s.reason;
+      lastRun = run.status === "fulfilled" ? run.value : null;
+    }
+    if (!quiet) render();
+    else render();
+  } catch (e) {
+    toast(e.message);
+  } finally { loading = false; spin(false); }
+}
+function spin(on) { document.querySelectorAll("[data-refresh]").forEach(b => b.classList.toggle("spin", on)); }
+
+async function saveWatch(msg, okText) {
+  if (cfg.demo) { toast("Mode démo : rien n'est enregistré"); render(); return true; }
+  try {
+    watch.sha = await gh.saveWatchlist(watch.data, watch.sha, msg);
+    store.set("watch", watch);
+    toast(okText || "Enregistré. Analyse relancée, résultat d'ici 1 à 2 min.");
+    render();
+    setTimeout(() => refresh({ quiet: true }), 100000);
+    return true;
+  } catch (e) {
+    if (e.status === 409) { await refresh({ quiet: true }); }
+    toast(e.message); return false;
+  }
+}
+
+/* ---------------------------------------------------------------- petits composants */
+function baro(s, big = false) {
+  const R = 8, thr = s.threshold || 4;
+  const net = Math.max(-R, Math.min(R, (s.score_sell || 0) - (s.score_buy || 0)));
+  const pos = 50 + net / R * 50;
+  const fill = net === 0 ? "" : net < 0
+    ? `<span class="fill buy" style="left:${pos}%;width:${50 - pos}%"></span>`
+    : `<span class="fill sell" style="left:50%;width:${pos - 50}%"></span>`;
+  const t = 50 - thr / R * 50, t2 = 50 + thr / R * 50;
+  return `<div class="baro${big ? " big" : ""}" role="img" aria-label="Score achat ${s.score_buy}, score vente ${s.score_sell}, seuil ${thr}">
+    <span class="lbl l">Achat ${Math.max(0, s.score_buy ?? 0)}</span><span class="lbl r">Vente ${Math.max(0, s.score_sell ?? 0)}</span>
+    <span class="track"></span>${fill}<span class="mid"></span>
+    <span class="thr" style="left:${t}%"></span><span class="thr" style="left:${t2}%"></span>
+    <span class="needle" style="left:${pos}%"></span></div>`;
+}
+function sparkSVG(v, w = 92, h = 34, cls = "spark", area = false) {
+  if (!v || v.length < 2) return "";
+  const mn = Math.min(...v), mx = Math.max(...v), rg = mx - mn || 1;
+  const pts = v.map((y, i) => [i / (v.length - 1) * w, h - 3 - (y - mn) / rg * (h - 6)]);
+  const d = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join("");
+  const col = v[v.length - 1] >= v[0] ? "var(--buy)" : "var(--sell)";
+  const a = area ? `<path d="${d}L${w} ${h}L0 ${h}Z" fill="${col}" opacity=".09"/>` : "";
+  return `<svg class="${cls}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">${a}<path d="${d}" fill="none" stroke="${col}" stroke-width="${area ? 2 : 1.6}" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`;
+}
+function activeSignal(s) {
+  if (!s.ok) return null;
+  const m = s.alert || "both";
+  if (s.event_buy && s.score_buy >= s.threshold && (m === "buy" || m === "both")) return "buy";
+  if (s.event_sell && s.score_sell >= s.threshold && (m === "sell" || m === "both")) return "sell";
+  return null;
+}
+const chev = `<svg class="chev" width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 1l6 6-6 6"/></svg>`;
+const refreshBtn = `<button class="iconbtn" data-refresh onclick="refresh()" aria-label="Actualiser"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg></button>`;
+
+/* ---------------------------------------------------------------- écrans */
+function vOnboarding() {
+  return `<div class="top"><div><h1>Radar</h1><p class="sub">Tes actifs surveillés, tes alertes d'achat et de vente.</p></div></div>
+  <div class="banner">Pour fonctionner, Radar se connecte à ton dépôt GitHub (le robot d'analyse). Suis le guide d'installation, puis renseigne ces trois champs.</div>
+  ${connForm()}
+  <h2>Juste pour voir</h2>
+  <div class="group"><button class="linkbtn" onclick="setDemo(true)">Essayer avec des données de démonstration</button></div>`;
+}
+function connForm() {
+  return `<form class="group" style="margin-top:12px" onsubmit="saveConn(event)">
+    <div class="field"><label for="owner">Nom d'utilisateur GitHub</label><input id="owner" autocomplete="username" autocapitalize="off" spellcheck="false" value="${esc(cfg.owner)}" placeholder="romain-cactus" required></div>
+    <div class="field"><label for="repo">Nom du dépôt</label><input id="repo" autocapitalize="off" spellcheck="false" value="${esc(cfg.repo || "radar")}" required></div>
+    <div class="field"><label for="token">Jeton d'accès (fine-grained token)</label><input id="token" type="password" autocapitalize="off" spellcheck="false" value="${esc(cfg.token)}" placeholder="github_pat_…" required>
+      <div class="help">Il reste uniquement sur ce téléphone.</div></div>
+    <div class="field"><button class="btn" type="submit">Se connecter</button></div>
+  </form>`;
+}
+
+function vMarket() {
+  const assets = Object.values(status?.assets || {});
+  const order = (watch?.data?.assets || []).map(a => a.symbol.toUpperCase());
+  assets.sort((a, b) => {
+    const sa = activeSignal(a) ? 0 : 1, sb = activeSignal(b) ? 0 : 1;
+    return sa - sb || order.indexOf(a.symbol) - order.indexOf(b.symbol);
+  });
+  const sig = assets.filter(activeSignal).length;
+  const up = assets.filter(a => a.bias === "haussier").length, dn = assets.filter(a => a.bias === "baissier").length;
+  const run = lastRun && lastRun.status !== "completed" ? " · analyse en cours…" : lastRun?.conclusion === "failure" ? " · dernière analyse en échec" : "";
+  const top = `<div class="top"><div><h1>Marché</h1><p class="sub">${status ? "Analysé " + ago(status.updated) : "En attente de la première analyse"}${run}${cfg.demo ? " · démo" : ""}</p></div>${refreshBtn}</div>`;
+  if (!assets.length) {
+    return top + `<div class="group"><div class="empty"><b>${status ? "Aucun actif surveillé" : "Première analyse en préparation"}</b>${status ? "Ajoute ton premier actif dans « Mes actifs »." : "Elle arrive automatiquement dans quelques minutes. Tu peux aussi la lancer depuis Réglages."}</div></div>`;
+  }
+  const pulse = `<div class="pulse"><span class="pill"><b>${sig}</b> ${sig > 1 ? "signaux actifs" : "signal actif"}</span><span class="pill"><b>${up}</b> haussier${up > 1 ? "s" : ""}</span><span class="pill"><b>${dn}</b> baissier${dn > 1 ? "s" : ""}</span>${status?.pending?.length ? `<span class="pill"><b>${status.pending.length}</b> en attente (silence)</span>` : ""}</div>`;
+  return top + pulse + `<h2>Du plus urgent au plus calme</h2><div class="group">${assets.map(cardAsset).join("")}</div>
+    <p class="note">Le curseur penche à gauche quand les indicateurs convergent vers un point d'achat, à droite vers un point de vente. Les petits traits marquent ton seuil d'alerte.</p>`;
+}
+function cardAsset(s) {
+  if (!s.ok && !s.stale) {
+    return `<button class="asset" onclick="go('#asset/${encodeURIComponent(s.symbol)}')"><div class="a-row"><span class="a-name">${esc(s.name)}<span class="a-sym">${esc(s.symbol)}</span></span></div>
+      <span class="flag err">Données indisponibles : vérifie le symbole</span></button>`;
+  }
+  const sig = activeSignal(s);
+  const ch = s.change > 0 ? "up" : s.change < 0 ? "down" : "";
+  return `<button class="asset" onclick="go('#asset/${encodeURIComponent(s.symbol)}')">
+    <div class="a-row"><span class="a-name">${esc(s.name)}<span class="a-sym">${esc(s.symbol)}</span></span><span class="a-price num">${money(s.price, s.currency)}</span></div>
+    <div class="a-meta"><span class="bias ${s.bias}">${cap(s.bias)}</span><span>RSI ${nf(s.ind?.rsi, 0)}</span><span>${TF[s.tf] || ""}</span><span style="margin-left:auto" class="chg num ${ch}">${pct(s.change, 2)}</span></div>
+    <div class="a-body">${baro(s)}${sparkSVG(s.spark?.slice(-60))}</div>
+    ${sig ? `<span class="flag ${sig}">${sig === "buy" ? "Point d'achat détecté" : "Point de vente détecté"}</span>` : ""}
+    ${!s.ok ? `<span class="flag err">Dernière mise à jour en échec, valeurs d'avant</span>` : ""}
+  </button>`;
+}
+const cap = s => s ? s[0].toUpperCase() + s.slice(1) : "";
+
+function rsiText(r) {
+  if (r == null) return "";
+  return r < 30 ? "survente : zone de rebond possible" : r < 40 ? "faible, proche de la survente" : r <= 60 ? "zone neutre" : r <= 70 ? "fort, proche du surachat" : "surachat : risque de repli";
+}
+function vAsset(sym) {
+  const s = status?.assets?.[sym];
+  const back = `<button class="back" onclick="history.length > 1 ? history.back() : go('#marche')"><svg width="10" height="16" viewBox="0 0 10 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M8 2L2 8l6 6"/></svg>Marché</button>`;
+  const wa = (watch?.data?.assets || []).find(a => a.symbol.toUpperCase() === sym);
+  if (!s) return back + `<div class="group" style="margin-top:8px"><div class="empty"><b>${esc(sym)}</b>Pas encore analysé. Le résultat arrive à la prochaine analyse.</div></div>${wa ? `<div style="margin-top:16px"><button class="btn ghost" onclick="openEditor('${esc(sym)}')">Modifier cet actif</button></div>` : ""}`;
+  if (!s.ok && !s.stale) return back + `<div class="hero"><div class="n">${esc(s.name)}</div><p class="sub">${esc(s.symbol)}</p></div>
+     <div class="banner warn">${esc(s.error || "Données indisponibles.")} Vérifie le symbole Yahoo Finance (ex. MC.PA pour LVMH à Paris, BTC-EUR pour le Bitcoin en euros).</div>
+     <div style="margin-top:16px">${wa ? `<button class="btn ghost" onclick="openEditor('${esc(sym)}')">Corriger le symbole</button>` : ""}</div>`;
+
+  const i = s.ind || {}, bt = s.backtest || {}, sig = activeSignal(s);
+  const verdict = sig === "buy" ? "Plusieurs indicateurs convergent vers un point d'achat."
+    : sig === "sell" ? "Plusieurs indicateurs convergent vers un point de vente."
+    : s.score_buy >= s.threshold - 1 ? "Les signaux d'achat se rapprochent du seuil, sans déclencheur pour l'instant."
+    : s.score_sell >= s.threshold - 1 ? "Les signaux de vente se rapprochent du seuil, sans déclencheur pour l'instant."
+    : "Pas de point d'entrée ou de sortie net : on attend.";
+  const reasons = (arr) => arr?.length ? `<ul class="reasons">${arr.map(r => `<li>${esc(r)}</li>`).join("")}</ul>` : `<div class="kv"><span class="k">Aucun élément</span></div>`;
+  const btRow = (k, lbl) => {
+    const b = bt[k] || {};
+    return b.n ? `<div class="stat3"><div><b class="num">${b.n}</b><span>${lbl} passés</span></div><div><b class="num">${nf(b.win, 0)} %</b><span>gagnants à ${esc(bt.horizon_label)}</span></div><div><b class="num" style="color:${(k === "buy" ? b.avg > 0 : b.avg < 0) ? "var(--buy)" : "var(--sell)"}">${pct(b.avg)}</b><span>variation moyenne</span></div></div>`
+      : `<div class="kv"><span class="k">Aucun signal ${lbl.toLowerCase()} comparable dans l'historique.</span></div>`;
+  };
+  const pos = s.position;
+  return back + `
+  <div class="hero">
+    <div class="n">${esc(s.name)}</div><p class="sub" style="margin:0">${esc(s.symbol)} · ${TF[s.tf]} · ${{ buy: "alertes achat", sell: "alertes vente", both: "alertes achat et vente", off: "alertes en pause" }[s.alert || "both"]} · ${SENS[s.sensitivity] || "Normal"}</p>
+    <div class="p num" style="margin-top:10px">${money(s.price, s.currency)}</div>
+    <div class="num chg ${s.change > 0 ? "up" : s.change < 0 ? "down" : ""}" style="font-weight:600">${pct(s.change, 2)} <span style="color:var(--muted);font-weight:400">sur la dernière bougie</span></div>
+    ${sparkSVG(s.spark, 320, 150, "chart", true)}
+  </div>
+  <p class="verdict">${verdict}</p>
+  <div class="group" style="margin-top:12px;padding:18px 16px 10px">${baro(s, true)}</div>
+
+  <h2>Ce qui pousse vers l'achat</h2><div class="group">${reasons(s.reasons_buy)}</div>
+  <h2>Ce qui pousse vers la vente</h2><div class="group">${reasons(s.reasons_sell)}</div>
+
+  <h2>Indicateurs</h2>
+  <div class="group">
+    <div class="kv"><span class="k">Tendance de fond</span><span class="v"><span class="bias ${s.bias}">${cap(s.bias)}</span><small>${i.dist_sma200 == null ? "MM200 pas encore disponible" : `${pct(i.dist_sma200)} par rapport à la MM200`}</small></span></div>
+    <div class="kv"><span class="k">RSI 14</span><span class="v num">${nf(i.rsi, 0)}<small>${rsiText(i.rsi)}</small></span></div>
+    <div class="kv"><span class="k">MACD</span><span class="v">${i.macd > i.macd_sig ? "Au-dessus du signal" : "Sous le signal"}<small>${i.macd > i.macd_sig ? "élan haussier" : "élan baissier"}${i.macd > 0 ? ", au-dessus de zéro" : ", sous zéro"}</small></span></div>
+    <div class="kv"><span class="k">Bollinger %B</span><span class="v num">${nf(i.pctb * 100, 0)} %<small>${i.pctb < 0 ? "sous la bande basse" : i.pctb > 1 ? "au-dessus de la bande haute" : i.pctb < .2 ? "près de la bande basse" : i.pctb > .8 ? "près de la bande haute" : "au milieu du canal"}</small></span></div>
+    <div class="kv"><span class="k">Stochastique</span><span class="v num">${nf(i.stoch_k, 0)} / ${nf(i.stoch_d, 0)}<small>${i.stoch_k < 20 ? "zone basse" : i.stoch_k > 80 ? "zone haute" : "zone médiane"}</small></span></div>
+    <div class="kv"><span class="k">Volatilité (ATR)</span><span class="v num">${pct(i.atr_pct).replace("+", "")}<small>mouvement moyen par bougie</small></span></div>
+    <div class="kv"><span class="k">Volume</span><span class="v num">${i.vol_ratio == null ? "—" : nf(i.vol_ratio, 1) + " ×"}<small>par rapport à la moyenne 20</small></span></div>
+  </div>
+
+  <h2>Position sur ${s.tf === "1wk" ? "1 an" : s.tf === "4h" ? "5 semaines" : "1 an"}</h2>
+  <div class="group" style="padding:14px 16px">
+    <div class="range"><i style="left:${Math.max(0, Math.min(100, s.range?.pos ?? 50))}%"></i></div>
+    <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted)" class="num"><span>${money(s.range?.low, s.currency)}</span><span>${pct(s.range?.from_high)} du plus haut</span><span>${money(s.range?.high, s.currency)}</span></div>
+  </div>
+
+  <h2>Fiabilité de ces signaux sur ${esc(s.name)}</h2>
+  <div class="group">${btRow("buy", "Achats")}${btRow("sell", "Ventes")}</div>
+  <p class="note">Rejeu du même signal, avec ta sensibilité, sur l'historique de cet actif. À comparer à la variation moyenne « sans signal » : ${pct(bt.baseline)} à ${esc(bt.horizon_label || "")}. Les performances passées ne préjugent pas des performances futures.</p>
+
+  ${pos ? `<h2>Ma position</h2><div class="group"><div class="kv"><span class="k">Prix d'entrée</span><span class="v num">${money(pos.entry, s.currency)}</span></div><div class="kv"><span class="k">Plus ou moins-value</span><span class="v num" style="font-weight:600;color:${pos.pnl >= 0 ? "var(--buy)" : "var(--sell)"}">${pct(pos.pnl)}</span></div><div class="kv"><span class="k">Stop indicatif (2 × ATR)</span><span class="v num">${money(s.price - 2 * (i.atr || 0), s.currency)}</span></div></div>` : ""}
+
+  <div style="margin-top:24px">${wa ? `<button class="btn ghost" onclick="openEditor('${esc(sym)}')">Modifier les alertes de cet actif</button>` : ""}</div>`;
+}
+
+function vAlerts() {
+  const f = store.get("afilter", "all");
+  const list = (status?.history || []).filter(a => f === "all" || a.side === f);
+  store.set("seen", status?.history?.[0]?.at || null); badge();
+  const groups = {};
+  list.forEach(a => { const d = new Date(a.at).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }); (groups[d] ||= []).push(a); });
+  const seg = `<div class="seg" role="group" aria-label="Filtrer" style="margin:4px 0 0">${[["all", "Toutes"], ["buy", "Achats"], ["sell", "Ventes"]].map(([k, l]) => `<button aria-pressed="${f === k}" onclick="store.set('afilter','${k}');render()">${l}</button>`).join("")}</div>`;
+  const body = list.length ? Object.entries(groups).map(([d, arr]) => `<h2>${cap(d)}</h2><div class="group">${arr.map(a => `
+      <details class="alert ${a.side}"><summary style="list-style:none;cursor:pointer"><div class="t">${esc(a.title)}</div><div class="w">${new Date(a.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} · ${a.kind === "signal" ? "signal technique" : a.kind === "stop" ? "stop" : "niveau de prix"}</div></summary><pre>${esc(a.body)}</pre>
+      <button class="linkbtn" style="padding:8px 0 0" onclick="go('#asset/${encodeURIComponent(a.symbol)}')">Voir l'actif</button></details>`).join("")}</div>`).join("")
+    : `<div class="group" style="margin-top:16px"><div class="empty"><b>Aucune alerte ${f === "buy" ? "d'achat " : f === "sell" ? "de vente " : ""}pour l'instant</b>Elles apparaissent ici en même temps que la notification sur ton téléphone.</div></div>`;
+  return `<div class="top"><div><h1>Alertes</h1><p class="sub">Les 150 dernières</p></div>${refreshBtn}</div>${seg}${body}`;
+}
+
+function vAssets() {
+  const list = watch?.data?.assets || [];
+  return `<div class="top"><div><h1>Mes actifs</h1><p class="sub">${list.length} surveillé${list.length > 1 ? "s" : ""}</p></div>
+    <button class="iconbtn" onclick="openEditor()" aria-label="Ajouter un actif"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></div>
+  ${list.length ? `<div class="group">${list.map(a => {
+    const s = status?.assets?.[a.symbol.toUpperCase()];
+    const mode = a.alert || "both";
+    const col = mode === "buy" ? "var(--buy)" : mode === "sell" ? "var(--sell)" : mode === "off" ? "var(--muted)" : "var(--accent)";
+    return `<button class="cell" onclick="openEditor('${esc(a.symbol)}')"><div class="grow"><div style="font-weight:600">${esc(a.name || a.symbol)}</div>
+      <small>${esc(a.symbol)} · ${TF[a.timeframe || "1d"]} · ${SENS[a.sensitivity || "normal"]}${a.target_buy ? " · zone " + nf(+a.target_buy, decs(+a.target_buy)) : ""}${s && !s.ok && !s.stale ? " · <span style='color:var(--warn)'>symbole introuvable</span>" : ""}</small></div>
+      <span style="font-size:14px;font-weight:600;color:${col}">${MODE[mode]}</span>${chev}</button>`;
+  }).join("")}</div>
+  <p class="note">Touche un actif pour choisir s'il t'alerte à l'achat, à la vente, aux deux, ou le mettre en pause.</p>`
+  : `<div class="group"><div class="empty"><b>Ta liste est vide</b>Ajoute un premier actif : action, ETF, indice ou crypto.</div><button class="linkbtn" onclick="openEditor()">Ajouter un actif</button></div>`}
+  <div style="margin-top:16px"><button class="btn" onclick="openEditor()">Ajouter un actif</button></div>`;
+}
+
+function vSettings() {
+  const st = watch?.data?.settings || {};
+  const hours = [...Array(24).keys()];
+  const opt = (v, sel, lbl) => `<option value="${v}" ${String(sel) === String(v) ? "selected" : ""}>${lbl}</option>`;
+  const ch = status?.channels || {};
+  return `<div class="top"><div><h1>Réglages</h1></div></div>
+  <h2>Notifications</h2>
+  <div class="group">
+    <div class="field"><label for="dg">Résumé quotidien</label><select id="dg" onchange="setSetting('digest_hour', this.value === '' ? null : +this.value)">${opt("", st.digest_hour ?? "", "Désactivé")}${[6, 7, 8, 9, 12, 18, 20].map(h => opt(h, st.digest_hour, `Chaque jour à ${h} h`)).join("")}</select>
+      <div class="help">Un récapitulatif de tous tes actifs, même sans signal.</div></div>
+    <div class="row2">
+      <div class="field"><label for="qs">Silence à partir de</label><select id="qs" onchange="setSetting('quiet_start', this.value === '' ? null : +this.value)">${opt("", st.quiet_start ?? "", "Jamais")}${hours.map(h => opt(h, st.quiet_start, h + " h")).join("")}</select></div>
+      <div class="field"><label for="qe">jusqu'à</label><select id="qe" onchange="setSetting('quiet_end', this.value === '' ? null : +this.value)">${opt("", st.quiet_end ?? "", "—")}${hours.map(h => opt(h, st.quiet_end, h + " h")).join("")}</select></div>
+    </div>
+    <div class="field"><div class="help" style="margin:0">Pendant le silence, les alertes sont gardées et envoyées au réveil. Utile pour les cryptos dont la bougie du jour se clôture à 2 h du matin.</div></div>
+    <button class="linkbtn" onclick="act('test')">Envoyer une notification de test</button>
+  </div>
+  ${status && !ch.ntfy && !ch.telegram && !cfg.demo ? `<div class="banner warn">Aucun canal de notification n'est configuré sur GitHub : ajoute le secret NTFY_TOPIC (voir le guide).</div>` : ""}
+
+  <h2>Analyse</h2>
+  <div class="group">
+    <div class="kv"><span class="k">Dernière analyse</span><span class="v">${status ? ago(status.updated) : "aucune"}${lastRun ? `<small>${lastRun.status !== "completed" ? "en cours" : lastRun.conclusion === "success" ? "réussie" : "en échec : voir l'onglet Actions sur GitHub"}</small>` : ""}</span></div>
+    <button class="linkbtn" onclick="act('run')">Analyser maintenant</button>
+  </div>
+  <p class="note">L'analyse tourne seule toutes les 30 minutes. Les signaux techniques se calculent sur des bougies clôturées pour éviter les fausses alertes ; les niveaux de prix que tu fixes sont surveillés en continu.</p>
+
+  <h2>Connexion</h2>
+  ${cfg.demo ? `<div class="group"><div class="kv"><span class="k">Mode démonstration</span><span class="v">activé</span></div><button class="linkbtn" onclick="setDemo(false)">Quitter la démo et me connecter</button></div>` : connForm()}
+
+  <h2>Installer sur l'iPhone</h2>
+  <div class="group"><div class="field"><div class="help" style="margin:0;font-size:14px;color:var(--ink)">Dans Safari, touche le bouton Partager, puis « Sur l'écran d'accueil ». Radar s'ouvre alors en plein écran comme une vraie appli.</div></div></div>
+
+  <p class="note" style="margin-top:20px">Radar est un outil d'aide à la décision fondé sur l'analyse technique. Il ne constitue pas un conseil en investissement : aucun indicateur ne garantit le sens du marché.</p>`;
+}
+
+/* ---------------------------------------------------------------- éditeur */
+let draft = null, draftOrig = null;
+function openEditor(sym) {
+  const list = watch?.data?.assets || [];
+  const ex = sym ? list.find(a => a.symbol.toUpperCase() === sym.toUpperCase()) : null;
+  draftOrig = ex ? ex.symbol : null;
+  draft = ex ? { ...ex } : { symbol: "", name: "", type: "action", alert: "both", timeframe: "1d", sensitivity: "normal" };
+  renderEditor();
+  $("#sheet").classList.add("open"); $("#sheetBg").classList.add("open");
+  setTimeout(() => !ex && $("#f-sym")?.focus(), 320);
+}
+function closeEditor() { $("#sheet").classList.remove("open"); $("#sheetBg").classList.remove("open"); }
+function segHTML(key, map, cls = "") {
+  return `<div class="seg ${cls}" role="group">${Object.entries(map).map(([k, l]) => `<button type="button" aria-pressed="${(draft[key] || "") === k}" onclick="draft.${key}='${k}';renderEditor()">${l}</button>`).join("")}</div>`;
+}
+function renderEditor() {
+  const d = draft, num = v => v ?? "";
+  const ex = { "BTC-EUR": "crypto", "ETH-EUR": "crypto", "SOL-EUR": "crypto", "AIR.PA": "action", "AAPL": "action", "CW8.PA": "etf", "^FCHI": "indice" };
+  $("#sheet").innerHTML = `
+  <header><button onclick="closeEditor()">Annuler</button><b id="sheetTitle">${draftOrig ? "Modifier" : "Nouvel actif"}</b><button class="strong" onclick="saveDraft()">Enregistrer</button></header>
+  <div class="group">
+    <div class="field"><label for="f-sym">Symbole Yahoo Finance</label><input id="f-sym" value="${esc(d.symbol)}" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="ex. MC.PA" oninput="draft.symbol=this.value.trim().toUpperCase()">
+      <div class="chips">${Object.entries(ex).map(([k, t]) => `<button type="button" onclick="draft.symbol='${k}';draft.type='${t}';renderEditor()">${k}</button>`).join("")}</div>
+      <div class="help">Paris : suffixe .PA (AIR.PA). Francfort : .DE. Cryptos : BTC-EUR ou BTC-USD. Indices : ^FCHI, ^GSPC. Vérifie sur finance.yahoo.com.</div></div>
+    <div class="field"><label for="f-name">Nom affiché</label><input id="f-name" value="${esc(d.name)}" placeholder="ex. LVMH" oninput="draft.name=this.value"></div>
+    <div class="field"><label for="f-type">Type</label><select id="f-type" onchange="draft.type=this.value">${Object.entries(TYPES).map(([k, l]) => `<option value="${k}" ${d.type === k ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+  </div>
+
+  <h2>M'alerter pour</h2>
+  <div class="group"><div class="field">${segHTML("alert", { buy: "Achat", sell: "Vente", both: "Les deux", off: "Pause" })}
+    <div class="help">${{ buy: "Tu ne seras prévenu que des points d'achat.", sell: "Tu ne seras prévenu que des points de vente (prise de bénéfices, sortie).", both: "Tu seras prévenu des points d'achat et de vente.", off: "L'actif reste affiché mais n'envoie plus d'alerte." }[d.alert || "both"]}</div></div></div>
+
+  <h2>Horizon d'analyse</h2>
+  <div class="group"><div class="field">${segHTML("timeframe", { "4h": "4 heures", "1d": "Jour", "1wk": "Semaine" })}
+    <div class="help">${{ "4h": "Pour du trading court : signaux fréquents, plus de bruit.", "1d": "Recommandé : swing trading de quelques jours à quelques semaines.", "1wk": "Pour investir à long terme : rares signaux, plus fiables." }[d.timeframe || "1d"]}</div></div></div>
+
+  <h2>Sensibilité</h2>
+  <div class="group"><div class="field">${segHTML("sensitivity", SENS)}<div class="help">${SENS_HELP[d.sensitivity || "normal"]}</div></div></div>
+
+  <h2>Mes niveaux de prix (facultatif)</h2>
+  <div class="group">
+    <div class="row2">
+      <div class="field"><label for="f-tb">Zone d'achat</label><input id="f-tb" inputmode="decimal" value="${num(d.target_buy)}" placeholder="alerte si ≤" oninput="draft.target_buy=pnum(this.value)"></div>
+      <div class="field"><label for="f-ts">Objectif de vente</label><input id="f-ts" inputmode="decimal" value="${num(d.target_sell)}" placeholder="alerte si ≥" oninput="draft.target_sell=pnum(this.value)"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label for="f-en">Prix d'entrée</label><input id="f-en" inputmode="decimal" value="${num(d.entry)}" placeholder="si tu détiens" oninput="draft.entry=pnum(this.value)"></div>
+      <div class="field"><label for="f-st">Stop</label><input id="f-st" inputmode="decimal" value="${num(d.stop)}" placeholder="alerte si ≤" oninput="draft.stop=pnum(this.value)"></div>
+    </div>
+    <div class="field"><div class="help" style="margin:0">Ces niveaux sont surveillés à chaque analyse, en plus des indicateurs. Le prix d'entrée affiche ta plus ou moins-value.</div></div>
+  </div>
+  ${draftOrig ? `<div style="margin-top:24px"><button class="btn danger" onclick="removeAsset()">Retirer ${esc(d.name || d.symbol)} de la liste</button></div>` : ""}`;
+}
+function pnum(v) { const n = parseFloat(String(v).replace(/\s/g, "").replace(",", ".")); return isNaN(n) ? null : n; }
+async function saveDraft() {
+  const d = draft;
+  if (!d.symbol) { toast("Indique le symbole de l'actif."); $("#f-sym")?.focus(); return; }
+  const list = watch.data.assets ||= [];
+  const dup = list.find(a => a.symbol.toUpperCase() === d.symbol && a.symbol !== draftOrig);
+  if (dup) { toast(`${d.symbol} est déjà dans ta liste.`); return; }
+  const clean = Object.fromEntries(Object.entries(d).filter(([, v]) => v !== null && v !== "" && v !== undefined));
+  const idx = list.findIndex(a => a.symbol === draftOrig);
+  if (idx >= 0) list[idx] = clean; else list.push(clean);
+  closeEditor();
+  await saveWatch(`${idx >= 0 ? "Modifie" : "Ajoute"} ${clean.symbol}`);
+}
+async function removeAsset() {
+  if (!confirm(`Retirer ${draft.name || draft.symbol} de la surveillance ?`)) return;
+  watch.data.assets = watch.data.assets.filter(a => a.symbol !== draftOrig);
+  closeEditor();
+  await saveWatch(`Retire ${draftOrig}`, `${draftOrig} retiré de la liste.`);
+}
+async function setSetting(k, v) {
+  (watch.data.settings ||= {})[k] = v;
+  await saveWatch(`Réglage ${k}`, "Réglage enregistré.");
+}
+
+/* ---------------------------------------------------------------- actions */
+async function act(kind) {
+  if (cfg.demo) { toast("Mode démo : connecte ton dépôt pour lancer une vraie analyse."); return; }
+  try { await gh.run(kind === "test"); toast(kind === "test" ? "Notification de test demandée : elle arrive d'ici 1 à 2 min." : "Analyse lancée : résultats d'ici 1 à 2 min."); setTimeout(() => refresh({ quiet: true }), 90000); }
+  catch (e) { toast(e.message); }
+}
+async function saveConn(ev) {
+  ev.preventDefault();
+  cfg = { owner: $("#owner").value.trim(), repo: $("#repo").value.trim(), token: $("#token").value.trim(), demo: false };
+  store.set("cfg", cfg); status = null; watch = null; store.set("status", null); store.set("watch", null);
+  try { await gh.watchlist(); toast("Connecté à GitHub."); go("#marche"); refresh(); }
+  catch (e) { toast(e.message); }
+}
+function setDemo(on) {
+  cfg.demo = on; store.set("cfg", cfg); status = null; watch = null;
+  if (on) { const d = demo(); status = d.status; watch = d.watch; go("#marche"); }
+  else { status = store.get("status", null); watch = store.get("watch", null); go("#reglages"); }
+  render();
+}
+
+/* ---------------------------------------------------------------- routeur */
+let toastT;
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 3400); }
+function go(h) { if (location.hash === h) render(); else location.hash = h; }
+function badge() {
+  const seen = store.get("seen", null), h = status?.history || [];
+  const n = h.filter(a => !seen || a.at > seen).length;
+  const b = $("#badge"); b.hidden = !n; b.textContent = n > 9 ? "9+" : n;
+}
+function render() {
+  const h = location.hash.slice(1) || "marche";
+  const [route, arg] = h.split("/");
+  document.querySelectorAll("nav.tabs a").forEach(a => a.setAttribute("aria-current", (route === a.dataset.tab || (route === "asset" && a.dataset.tab === "marche")) ? "page" : "false"));
+  $("nav.tabs").hidden = !connected();
+  const v = $("#view");
+  if (!connected()) { v.innerHTML = vOnboarding(); return; }
+  v.innerHTML = route === "asset" ? vAsset(decodeURIComponent(arg || "").toUpperCase())
+    : route === "alertes" ? vAlerts() : route === "actifs" ? vAssets() : route === "reglages" ? vSettings() : vMarket();
+  badge();
+}
+window.addEventListener("hashchange", () => { render(); window.scrollTo(0, 0); });
+$("#sheetBg").addEventListener("click", closeEditor);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeEditor(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh({ quiet: true }); });
+
+if (cfg.demo) { const d = demo(); status = d.status; watch = d.watch; }
+render();
+refresh();
+setInterval(() => !document.hidden && refresh({ quiet: true }), 5 * 60000);
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>

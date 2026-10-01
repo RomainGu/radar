@@ -1,0 +1,14 @@
+{
+  "settings": {
+    "digest_hour": 8,
+    "quiet_start": 22,
+    "quiet_end": 7
+  },
+  "assets": [
+    {"symbol": "BTC-EUR", "name": "Bitcoin", "type": "crypto", "alert": "both", "timeframe": "1d", "sensitivity": "normal"},
+    {"symbol": "ETH-EUR", "name": "Ethereum", "type": "crypto", "alert": "buy", "timeframe": "1d", "sensitivity": "normal"},
+    {"symbol": "CW8.PA", "name": "Amundi MSCI World", "type": "etf", "alert": "buy", "timeframe": "1d", "sensitivity": "prudent"},
+    {"symbol": "MC.PA", "name": "LVMH", "type": "action", "alert": "both", "timeframe": "1d", "sensitivity": "normal"},
+    {"symbol": "^FCHI", "name": "CAC 40", "type": "indice", "alert": "both", "timeframe": "1wk", "sensitivity": "normal"}
+  ]
+}
