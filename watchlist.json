@@ -196,6 +196,14 @@
       "alert": "both",
       "timeframe": "1d",
       "sensitivity": "normal"
+    },
+    {
+      "symbol": "TEP.PA",
+      "name": "Teleperformance SE",
+      "type": "action",
+      "alert": "sell",
+      "timeframe": "1d",
+      "sensitivity": "normal"
     }
   ]
 }
