@@ -188,6 +188,14 @@
       "alert": "both",
       "timeframe": "1d",
       "sensitivity": "normal"
+    },
+    {
+      "symbol": "GTT.PA",
+      "name": "Gaztransport et technigaz SA",
+      "type": "action",
+      "alert": "both",
+      "timeframe": "1d",
+      "sensitivity": "normal"
     }
   ]
 }
