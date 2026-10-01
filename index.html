@@ -650,8 +650,10 @@ const LOCAL = [ // indices, matières premières et devises : tickers Yahoo dire
 ];
 const norm = t => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 
+const YAHOO_EXCEPTIONS = { "STM@XPAR": "STMPA.PA" }; // codes Yahoo qui diffèrent du code de la Bourse
 function yahooTicker(sym, mic) {
   const m = MIC[mic]; if (!m) return null;
+  if (YAHOO_EXCEPTIONS[sym + "@" + mic]) return YAHOO_EXCEPTIONS[sym + "@" + mic];
   let s = String(sym).trim();
   if (m[0] !== "" && s.includes(".")) return null; // codes Twelve Data sans équivalent Yahoo
   if (mic === "XHKG") s = s.padStart(4, "0");
