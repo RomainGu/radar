@@ -370,6 +370,37 @@ def backtest(d: dict[str, np.ndarray], n: int, tf: str, thresholds: tuple[int, i
     return out
 
 
+def history_1y(df: pd.DataFrame, d: dict[str, np.ndarray], n_closed: int, tf: str,
+               thr: tuple[int, int], mode: str) -> tuple[list, list]:
+    """Signaux que Radar aurait envoyés sur les 365 derniers jours (bougies clôturées, réglage actuel)."""
+    H = HORIZON[tf]
+    close = d["close"]
+    idx = df.index
+    start = idx[n_closed - 1] - timedelta(days=365)
+    sigs, last = [], {"buy": -10**9, "sell": -10**9}
+    for i in range(max(201, 1), n_closed):
+        if idx[i] < start:
+            continue
+        bs, br, be, ss, sr, se = score_at(d, i)
+        for side, sc, ev, reasons, t in (("buy", bs, be, br, thr[0]), ("sell", ss, se, sr, thr[1])):
+            if mode not in (side, "both") or not ev or sc < t or i - last[side] < COOLDOWN_BARS:
+                continue
+            last[side] = i
+            j = min(i + H, len(close) - 1)
+            ret = close[j] / close[i] - 1
+            sigs.append({"t": idx[i].isoformat(), "side": side, "score": int(sc), "price": float(close[i]),
+                         "ret": float(ret), "done": bool(i + H < len(close)),
+                         "why": [r for r in reasons if not r.startswith(("Tendance", "Contre", "…"))][:3]})
+    # courbe de prix sur un an, allégée à ~260 points
+    sel = [k for k in range(len(idx)) if idx[k] >= start]
+    step = max(1, len(sel) // 260)
+    pts = sel[::step]
+    if pts and pts[-1] != len(idx) - 1:
+        pts.append(len(idx) - 1)
+    curve = [[int(idx[k].timestamp() // 60), float(f"{close[k]:.6g}")] for k in pts]
+    return sigs[::-1], curve
+
+
 # --------------------------------------------------------------------------- notifications
 
 def notify(title: str, body: str, side: str = "info", priority: int = 3, sym: str | None = None) -> bool:
@@ -449,6 +480,7 @@ def analyse(asset: dict, prev_state: dict, settings: dict):
     row = df.iloc[i]
     bias, bias_pts = bias_of(row)
     bt = backtest(d, n_closed, tf, (thr_b, thr_s))
+    hist, curve = history_1y(df, d, n_closed, tf, (thr_b, thr_s), mode)
 
     bar_ts = df.index[i].isoformat()
     atr = float(row["atr"]) if _ok(float(row["atr"])) else None
@@ -555,6 +587,8 @@ def analyse(asset: dict, prev_state: dict, settings: dict):
         "position": ({"entry": float(entry), "pnl": (price / float(entry) - 1) * 100} if entry else None),
         "backtest": bt,
         "spark": spark,
+        "history": hist,
+        "curve": curve,
         "updated": NOW.isoformat(),
     }
     return status, st, alerts
