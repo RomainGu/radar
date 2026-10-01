@@ -44,6 +44,14 @@
       "alert": "both",
       "timeframe": "1d",
       "sensitivity": "normal"
+    },
+    {
+      "symbol": "ADA-EUR",
+      "name": "Cardano",
+      "type": "crypto",
+      "alert": "both",
+      "timeframe": "1d",
+      "sensitivity": "normal"
     }
   ]
 }
