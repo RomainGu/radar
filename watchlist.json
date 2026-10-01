@@ -83,7 +83,7 @@
       "type": "crypto",
       "alert": "both",
       "timeframe": "1d",
-      "sensitivity": "normal"
+      "sensitivity": "reactif"
     },
     {
       "symbol": "PE500.PA",
