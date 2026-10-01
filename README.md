@@ -85,7 +85,7 @@ Aucun indicateur seul n'est fiable : la plupart donnent autant de faux signaux q
 | Tendance de fond | +1 si au-dessus de la MM200, −1 sinon | +1 si en dessous, −1 sinon | ±1 |
 | Volume | Bougie verte à plus de 1,5 × la moyenne | Bougie rouge à plus de 1,5 × la moyenne | 1 |
 
-Seuils : **Prudent** 5 points · **Normal** 4 · **Réactif** 3.
+Seuils (achat / vente) : **Prudent** 6 / 6 · **Normal** 6 / 5 (recommandé) · **Réactif** 5 / 4. Ils ont été calibrés par backtest sur 36 actifs : en dessous, les signaux ne faisaient pas mieux que la tendance normale des actifs. Le module `engine/backtest.py` (workflow « Radar — backtest ») permet de refaire la mesure à tout moment.
 
 Principes qui limitent les fausses alertes :
 

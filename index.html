@@ -92,8 +92,17 @@ h2{font:600 13px/1.3 var(--body);color:var(--muted);margin:26px 4px 8px}
 
 /* ---------- résumé */
 .pulse{display:flex;gap:8px;flex-wrap:wrap;margin:6px 4px 0}
-.pill{font-size:13px;padding:5px 11px;border-radius:999px;background:var(--surface);color:var(--muted)}
+.pill{font-size:13px;padding:5px 11px;border-radius:999px;background:var(--surface);color:var(--muted);border:1.5px solid transparent}
 .pill b{color:var(--ink);font-weight:600}
+button.pill{cursor:pointer}
+button.pill[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+button.pill[aria-pressed="true"] b{color:var(--accent)}
+button.pill.f-signal[aria-pressed="true"]{border-color:var(--ink);background:var(--sunk);color:var(--ink)}
+button.pill.f-signal[aria-pressed="true"] b{color:var(--ink)}
+button.pill.f-haussier[aria-pressed="true"]{border-color:var(--buy);background:var(--buy-soft);color:var(--buy)}
+button.pill.f-haussier[aria-pressed="true"] b{color:var(--buy)}
+button.pill.f-baissier[aria-pressed="true"]{border-color:var(--sell);background:var(--sell-soft);color:var(--sell)}
+button.pill.f-baissier[aria-pressed="true"] b{color:var(--sell)}
 
 /* ---------- détail */
 .back{display:inline-flex;align-items:center;gap:4px;border:0;background:none;color:var(--accent);padding:10px 0;font-size:16px}
@@ -231,9 +240,9 @@ const TF = { "4h": "4 h", "1d": "Jour", "1wk": "Semaine" };
 const MODE = { buy: "Achat", sell: "Vente", both: "Les deux", off: "Pause" };
 const SENS = { prudent: "Prudent", normal: "Normal", reactif: "Réactif" };
 const SENS_HELP = {
-  prudent: "Moins d'alertes, seulement quand plusieurs indicateurs concordent fortement (score ≥ 5).",
-  normal: "Bon équilibre : au moins deux signaux concordants (score ≥ 4).",
-  reactif: "Plus d'alertes, plus tôt, mais plus de faux signaux (score ≥ 3)."
+  prudent: "Achat dès un score de 6, vente dès 6 : le moins d'alertes, réservées aux configurations les plus nettes.",
+  normal: "Recommandé. Achat dès un score de 6, vente dès 5 : le réglage le plus fiable au backtest, environ une alerte d'achat par actif et par an.",
+  reactif: "Achat dès un score de 5, vente dès 4 : plus d'alertes, mais nettement plus de faux signaux."
 };
 const TYPES = { action: "Action", etf: "ETF", crypto: "Crypto", indice: "Indice", matiere: "Matière première", devise: "Devise", fonds: "Fonds", autre: "Autre" };
 
@@ -314,7 +323,7 @@ function demo() {
     for (let i = 0; i < 90; i++) { p *= 1 + (rnd() - .5) * vol + drift; spark.push(p); }
     const prev = spark[88], price = spark[89];
     return {
-      ok: true, symbol: sym, name, currency: cur, type, tf, sensitivity: sens, threshold: { prudent: 5, normal: 4, reactif: 3 }[sens], alert: mode,
+      ok: true, symbol: sym, name, currency: cur, type, tf, sensitivity: sens, threshold_buy: { prudent: 6, normal: 6, reactif: 5 }[sens], threshold_sell: { prudent: 6, normal: 5, reactif: 4 }[sens], alert: mode,
       price, change: (price / prev - 1) * 100, bar: new Date().toISOString(), bias: opts.bias || "neutre",
       score_buy: opts.sb ?? 1, score_sell: opts.ss ?? -1, event_buy: !!opts.eb, event_sell: !!opts.es,
       reasons_buy: opts.rb || ["Tendance de fond haussière (au-dessus de la MM200)"], reasons_sell: opts.rs || ["Contre-tendance : le fond reste haussier"],
@@ -326,10 +335,10 @@ function demo() {
     };
   };
   const a = {
-    "BTC-EUR": mk("BTC-EUR", "Bitcoin", "EUR", 52000, .05, .001, "crypto", "both", "1d", "normal", { bias: "haussier", sb: 5, eb: true, rsi: 34, pctb: .08, pos: 41, fh: -18.2, rb: ["RSI sort de la survente (34)", "Réintègre la bande de Bollinger basse", "Tendance de fond haussière (au-dessus de la MM200)"], bn: 14, bw: 71, ba: 6.8 }),
+    "BTC-EUR": mk("BTC-EUR", "Bitcoin", "EUR", 52000, .05, .001, "crypto", "both", "1d", "normal", { bias: "haussier", sb: 6, eb: true, rsi: 34, pctb: .08, pos: 41, fh: -18.2, rb: ["RSI sort de la survente (34)", "Réintègre la bande de Bollinger basse", "Tendance de fond haussière (au-dessus de la MM200)"], bn: 14, bw: 71, ba: 6.8 }),
     "ETH-EUR": mk("ETH-EUR", "Ethereum", "EUR", 2300, .06, -.001, "crypto", "buy", "1d", "normal", { bias: "baissier", sb: 0, ss: 3, rsi: 41, d200: 1.08, pos: 22, fh: -36, rb: ["Contre-tendance : sous la MM200"], rs: ["MACD croise sa ligne de signal à la baisse", "Tendance de fond baissière (sous la MM200)"] }),
     "CW8.PA": mk("CW8.PA", "Amundi MSCI World", "EUR", 520, .012, .0007, "etf", "buy", "1d", "prudent", { bias: "haussier", sb: 2, rsi: 61, pos: 91, fh: -1.2, entry: 470 }),
-    "MC.PA": mk("MC.PA", "LVMH", "EUR", 640, .022, -.0004, "action", "both", "1d", "normal", { bias: "neutre", sb: 1, ss: 4, es: true, rsi: 72, pctb: 1.05, d200: .99, pos: 58, rs: ["RSI sort du surachat (68)", "Réintègre la bande de Bollinger haute", "MACD croise sa ligne de signal à la baisse", "Contre-tendance : le fond reste haussier"] }),
+    "MC.PA": mk("MC.PA", "LVMH", "EUR", 640, .022, -.0004, "action", "both", "1d", "normal", { bias: "neutre", sb: 1, ss: 5, es: true, rsi: 72, pctb: 1.05, d200: .99, pos: 58, rs: ["RSI sort du surachat (68)", "Réintègre la bande de Bollinger haute", "MACD croise sa ligne de signal à la baisse", "Contre-tendance : le fond reste haussier"] }),
     "^FCHI": mk("^FCHI", "CAC 40", "EUR", 7600, .012, .0002, "indice", "both", "1wk", "normal", { bias: "haussier", sb: 1, ss: 0, rsi: 57, pos: 74 })
   };
   const now = Date.now();
@@ -385,14 +394,14 @@ async function saveWatch(msg, okText) {
 
 /* ---------------------------------------------------------------- petits composants */
 function baro(s, big = false) {
-  const R = 8, thr = s.threshold || 4;
+  const R = 8, thrB = s.threshold_buy || s.threshold || 6, thrS = s.threshold_sell || s.threshold || 5;
   const net = Math.max(-R, Math.min(R, (s.score_sell || 0) - (s.score_buy || 0)));
   const pos = 50 + net / R * 50;
   const fill = net === 0 ? "" : net < 0
     ? `<span class="fill buy" style="left:${pos}%;width:${50 - pos}%"></span>`
     : `<span class="fill sell" style="left:50%;width:${pos - 50}%"></span>`;
-  const t = 50 - thr / R * 50, t2 = 50 + thr / R * 50;
-  return `<div class="baro${big ? " big" : ""}" role="img" aria-label="Score achat ${s.score_buy}, score vente ${s.score_sell}, seuil ${thr}">
+  const t = 50 - thrB / R * 50, t2 = 50 + thrS / R * 50;
+  return `<div class="baro${big ? " big" : ""}" role="img" aria-label="Score achat ${s.score_buy} sur un seuil de ${thrB}, score vente ${s.score_sell} sur un seuil de ${thrS}">
     <span class="lbl l">Achat ${Math.max(0, s.score_buy ?? 0)}</span><span class="lbl r">Vente ${Math.max(0, s.score_sell ?? 0)}</span>
     <span class="track"></span>${fill}<span class="mid"></span>
     <span class="thr" style="left:${t}%"></span><span class="thr" style="left:${t2}%"></span>
@@ -410,8 +419,9 @@ function sparkSVG(v, w = 92, h = 34, cls = "spark", area = false) {
 function activeSignal(s) {
   if (!s.ok) return null;
   const m = s.alert || "both";
-  if (s.event_buy && s.score_buy >= s.threshold && (m === "buy" || m === "both")) return "buy";
-  if (s.event_sell && s.score_sell >= s.threshold && (m === "sell" || m === "both")) return "sell";
+  const tb = s.threshold_buy || s.threshold, ts = s.threshold_sell || s.threshold;
+  if (s.event_buy && s.score_buy >= tb && (m === "buy" || m === "both")) return "buy";
+  if (s.event_sell && s.score_sell >= ts && (m === "sell" || m === "both")) return "sell";
   return null;
 }
 const chev = `<svg class="chev" width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 1l6 6-6 6"/></svg>`;
@@ -449,8 +459,19 @@ function vMarket() {
   if (!assets.length) {
     return top + `<div class="group"><div class="empty"><b>${status ? "Aucun actif surveillé" : "Première analyse en préparation"}</b>${status ? "Ajoute ton premier actif dans « Mes actifs »." : "Elle arrive automatiquement dans quelques minutes. Tu peux aussi la lancer depuis Réglages."}</div></div>`;
   }
-  const pulse = `<div class="pulse"><span class="pill"><b>${sig}</b> ${sig > 1 ? "signaux actifs" : "signal actif"}</span><span class="pill"><b>${up}</b> haussier${up > 1 ? "s" : ""}</span><span class="pill"><b>${dn}</b> baissier${dn > 1 ? "s" : ""}</span>${status?.pending?.length ? `<span class="pill"><b>${status.pending.length}</b> en attente (silence)</span>` : ""}</div>`;
-  return top + pulse + `<h2>Du plus urgent au plus calme</h2><div class="group">${assets.map(cardAsset).join("")}</div>
+  const filt = store.get("mfilter", null);
+  const FILTERS = {
+    signal: { n: sig, lbl: sig > 1 ? "signaux actifs" : "signal actif", test: a => !!activeSignal(a), head: "Actifs avec un signal", none: "Aucun signal actif pour l'instant." },
+    haussier: { n: up, lbl: up > 1 ? "haussiers" : "haussier", test: a => a.bias === "haussier", head: "Actifs en tendance haussière", none: "Aucun actif en tendance haussière." },
+    baissier: { n: dn, lbl: dn > 1 ? "baissiers" : "baissier", test: a => a.bias === "baissier", head: "Actifs en tendance baissière", none: "Aucun actif en tendance baissière." }
+  };
+  const f = FILTERS[filt];
+  const shown = f ? assets.filter(f.test) : assets;
+  const pulse = `<div class="pulse" role="group" aria-label="Filtrer la liste">${Object.entries(FILTERS).map(([k, x]) =>
+    `<button type="button" class="pill f-${k}" aria-pressed="${filt === k}" onclick="setMFilter('${k}')"><b>${x.n}</b> ${x.lbl}</button>`).join("")}${status?.pending?.length ? `<span class="pill"><b>${status.pending.length}</b> en attente (silence)</span>` : ""}</div>`;
+  const list = shown.length ? `<div class="group">${shown.map(cardAsset).join("")}</div>`
+    : `<div class="group"><div class="empty"><b>${f.none}</b>Touche à nouveau le filtre pour revoir tous tes actifs.</div></div>`;
+  return top + pulse + `<h2>${f ? f.head : "Du plus urgent au plus calme"}</h2>${list}
     <p class="note">Le curseur penche à gauche quand les indicateurs convergent vers un point d'achat, à droite vers un point de vente. Les petits traits marquent ton seuil d'alerte.</p>`;
 }
 function cardAsset(s) {
@@ -486,8 +507,8 @@ function vAsset(sym) {
   const i = s.ind || {}, bt = s.backtest || {}, sig = activeSignal(s);
   const verdict = sig === "buy" ? "Plusieurs indicateurs convergent vers un point d'achat."
     : sig === "sell" ? "Plusieurs indicateurs convergent vers un point de vente."
-    : s.score_buy >= s.threshold - 1 ? "Les signaux d'achat se rapprochent du seuil, sans déclencheur pour l'instant."
-    : s.score_sell >= s.threshold - 1 ? "Les signaux de vente se rapprochent du seuil, sans déclencheur pour l'instant."
+    : s.score_buy >= (s.threshold_buy || s.threshold) - 1 ? "Les signaux d'achat se rapprochent du seuil, sans déclencheur pour l'instant."
+    : s.score_sell >= (s.threshold_sell || s.threshold) - 1 ? "Les signaux de vente se rapprochent du seuil, sans déclencheur pour l'instant."
     : "Pas de point d'entrée ou de sortie net : on attend.";
   const reasons = (arr) => arr?.length ? `<ul class="reasons">${arr.map(r => `<li>${esc(r)}</li>`).join("")}</ul>` : `<div class="kv"><span class="k">Aucun élément</span></div>`;
   const btRow = (k, lbl) => {
@@ -805,6 +826,8 @@ function setDemo(on) {
   else { status = store.get("status", null); watch = store.get("watch", null); go("#reglages"); }
   render();
 }
+
+function setMFilter(k) { store.set("mfilter", store.get("mfilter", null) === k ? null : k); render(); }
 
 /* ---------------------------------------------------------------- routeur */
 let toastT;
