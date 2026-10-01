@@ -76,6 +76,14 @@
       "alert": "sell",
       "timeframe": "1d",
       "sensitivity": "normal"
+    },
+    {
+      "symbol": "ATOM-EUR",
+      "name": "Cosmos Hub",
+      "type": "crypto",
+      "alert": "both",
+      "timeframe": "1d",
+      "sensitivity": "normal"
     }
   ]
 }
