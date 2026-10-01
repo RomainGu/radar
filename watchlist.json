@@ -20,14 +20,6 @@
       "alert": "sell",
       "timeframe": "1d",
       "sensitivity": "normal"
-    },
-    {
-      "symbol": "^FCHI",
-      "name": "CAC 40",
-      "type": "indice",
-      "alert": "both",
-      "timeframe": "1wk",
-      "sensitivity": "normal"
     }
   ]
 }
