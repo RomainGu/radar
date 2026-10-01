@@ -180,6 +180,14 @@
       "alert": "both",
       "timeframe": "1d",
       "sensitivity": "normal"
+    },
+    {
+      "symbol": "STM.PA",
+      "name": "STMicroelectronics NV",
+      "type": "action",
+      "alert": "both",
+      "timeframe": "1d",
+      "sensitivity": "normal"
     }
   ]
 }
