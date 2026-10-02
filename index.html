@@ -252,9 +252,9 @@ const TF = { "4h": "4 h", "1d": "Jour", "1wk": "Semaine" };
 const MODE = { buy: "Achat", sell: "Vente", both: "Les deux", off: "Pause" };
 const SENS = { prudent: "Prudent", normal: "Normal", reactif: "Réactif" };
 const SENS_HELP = {
-  prudent: "Achat dès un score de 6, vente dès 6 : le moins d'alertes, réservées aux configurations les plus nettes.",
-  normal: "Recommandé. Achat dès un score de 6, vente dès 5 : le réglage le plus fiable au backtest, environ une alerte d'achat par actif et par an.",
-  reactif: "Achat dès un score de 5, vente dès 4 : plus d'alertes, mais nettement plus de faux signaux."
+  prudent: "Vente dès un score de 6 : le moins d'alertes de vente. L'achat suit la règle de la classe d'actif (rebond du RSI pour actions, ETF et indices).",
+  normal: "Recommandé. Vente dès un score de 5. L'achat suit la règle de la classe d'actif (rebond du RSI pour actions, ETF et indices).",
+  reactif: "Vente dès un score de 4 : plus d'alertes, plus de faux signaux. L'achat suit la règle de la classe d'actif."
 };
 const TYPES = { action: "Action", etf: "ETF", crypto: "Crypto", indice: "Indice", matiere: "Matière première", devise: "Devise", fonds: "Fonds", autre: "Autre" };
 
@@ -435,6 +435,7 @@ function sparkSVG(v, w = 92, h = 34, cls = "spark", area = false) {
 function activeSignal(s) {
   if (!s.ok) return null;
   const m = s.alert || "both";
+  if (typeof s.signal_buy === "boolean") return s.signal_buy ? "buy" : s.signal_sell ? "sell" : null;
   const tb = s.threshold_buy || s.threshold, ts = s.threshold_sell || s.threshold;
   if (s.event_buy && s.score_buy >= tb && (m === "buy" || m === "both")) return "buy";
   if (s.event_sell && s.score_sell >= ts && (m === "sell" || m === "both")) return "sell";
@@ -521,7 +522,8 @@ function vAsset(sym) {
      <div style="margin-top:16px">${wa ? `<button class="btn ghost" onclick="openEditor('${esc(sym)}')">Corriger le symbole</button>` : ""}</div>`;
 
   const i = s.ind || {}, bt = s.backtest || {}, sig = activeSignal(s);
-  const verdict = sig === "buy" ? "Plusieurs indicateurs convergent vers un point d'achat."
+  const verdict = sig === "buy" && s.buy_rule === "rsi" ? "Le RSI vient de sortir de la survente : c'est le signal d'achat le plus fiable au backtest."
+    : sig === "buy" ? "Plusieurs indicateurs convergent vers un point d'achat."
     : sig === "sell" ? "Plusieurs indicateurs convergent vers un point de vente."
     : s.score_buy >= (s.threshold_buy || s.threshold) - 1 ? "Les signaux d'achat se rapprochent du seuil, sans déclencheur pour l'instant."
     : s.score_sell >= (s.threshold_sell || s.threshold) - 1 ? "Les signaux de vente se rapprochent du seuil, sans déclencheur pour l'instant."
@@ -690,6 +692,10 @@ function vSettings() {
     <button class="linkbtn" onclick="act('test')">Envoyer une notification de test</button>
   </div>
   ${status && !ch.ntfy && !ch.telegram && !cfg.demo ? `<div class="banner warn">Aucun canal de notification n'est configuré sur GitHub : ajoute le secret NTFY_TOPIC (voir le guide).</div>` : ""}
+
+  <h2>Alertes d'achat sur les cryptos</h2>
+  <div class="group"><div class="field"><label for="cb">Règle utilisée</label><select id="cb" onchange="setSetting('crypto_buy', this.value)">${[["score", "Score de confluence ≥ seuil"], ["rsi", "Rebond du RSI (comme les actions)"], ["off", "Pas d'alerte d'achat technique"]].map(([v, l]) => opt(v, st.crypto_buy || "score", l)).join("")}</select>
+    <div class="help">Au backtest (56 actifs, 2 périodes), aucune règle d'achat technique n'a battu le hasard sur les cryptos. Tes zones d'achat personnelles restent actives quel que soit ce choix.</div></div></div>
 
   <h2>Analyse</h2>
   <div class="group">
