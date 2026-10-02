@@ -35,6 +35,10 @@ BUY = {
     "B4": "Retour à la moyenne combiné : B1 ou B2 ou B3",
     "B5": "Cassure du plus haut de 50 jours, en tendance haussière",
     "B6": "RSI 14 sort de la survente, sans filtre de tendance",
+    "B7": "Order block haussier (cassure de structure + FVG), retour dans la zone",
+    "B8": "Order block haussier (cassure de structure seule), retour dans la zone",
+    "B9": "Order block haussier avec FVG, en tendance haussière",
+    "B10": "Suivi de tendance : clôture au-dessus de la MM50 quand MM50 > MM200",
 }
 SELL = {
     "S0": "Score Radar actuel ≥ 5",
@@ -44,6 +48,10 @@ SELL = {
     "S4": "Rebond combiné : S1 ou S2 ou S3",
     "S5": "Cassure du plus bas de 50 jours, en tendance baissière",
     "S6": "Réintégration de la bande de Bollinger haute, sans filtre de tendance",
+    "S7": "Order block baissier (cassure de structure + FVG), retour dans la zone",
+    "S8": "Order block baissier (cassure de structure seule), retour dans la zone",
+    "S9": "Order block baissier avec FVG, en tendance baissière",
+    "S10": "Suivi de tendance : clôture sous la MM50 quand MM50 < MM200",
 }
 
 
@@ -52,6 +60,70 @@ def rsi(c: pd.Series, n: int) -> pd.Series:
     g, l = d.clip(lower=0), (-d).clip(lower=0)
     rs = g.ewm(alpha=1 / n, adjust=False, min_periods=n).mean() / l.ewm(alpha=1 / n, adjust=False, min_periods=n).mean()
     return 100 - 100 / (1 + rs)
+
+
+
+def order_blocks(df: pd.DataFrame, need_fvg: bool, lookback: int = 15, life: int = 40) -> tuple[np.ndarray, np.ndarray]:
+    """Order blocks « Smart Money » sur bougies jour, sans regarder le futur.
+
+    Haussier : le cours clôture au-dessus du dernier sommet de swing confirmé (cassure de structure).
+    L'order block est la dernière bougie baissière avant l'impulsion (au plus bas des `lookback`
+    dernières bougies). Avec `need_fvg`, l'impulsion doit laisser un déséquilibre (FVG :
+    plus bas d'une bougie au-dessus du plus haut de l'avant-veille). Signal d'achat au premier retour
+    du cours dans la zone [plus bas ; plus haut] de l'order block, si la bougie clôture au-dessus du
+    bas de zone, dans les `life` bougies. Zone invalidée par une clôture sous son plus bas.
+    Baissier : symétrique.
+    """
+    o, h, l, c = (df[k].to_numpy(float) for k in ("open", "high", "low", "close"))
+    n = len(c)
+    buy, sell = np.zeros(n, bool), np.zeros(n, bool)
+    sw_hi = sw_lo = None
+    zones_b, zones_s = [], []  # [zone_lo, zone_hi, créée_à, active]
+    broke_hi = broke_lo = False
+    for i in range(5, n):
+        # swing confirmé à i-2 (fractal 5 bougies), connu seulement à la clôture de i
+        k = i - 2
+        if h[k] == max(h[k - 2:k + 3]):
+            sw_hi, broke_hi = h[k], False
+        if l[k] == min(l[k - 2:k + 3]):
+            sw_lo, broke_lo = l[k], False
+        # retours dans les zones existantes
+        for z in zones_b:
+            if not z[3]:
+                continue
+            if i - z[2] > life or c[i] < z[0]:
+                z[3] = False
+            elif l[i] <= z[1] and i > z[2]:
+                buy[i] = True
+                z[3] = False
+        for z in zones_s:
+            if not z[3]:
+                continue
+            if i - z[2] > life or c[i] > z[1]:
+                z[3] = False
+            elif h[i] >= z[0] and i > z[2]:
+                sell[i] = True
+                z[3] = False
+        # cassures de structure
+        if sw_hi is not None and not broke_hi and c[i] > sw_hi:
+            broke_hi = True
+            j0 = max(0, i - lookback)
+            lo_idx = j0 + int(np.argmin(l[j0:i + 1]))
+            ob_idx = next((j for j in range(lo_idx, max(j0, lo_idx - 5) - 1, -1) if c[j] < o[j]), None)
+            if ob_idx is not None:
+                fvg = any(l[m] > h[m - 2] for m in range(ob_idx + 2, i + 1))
+                if fvg or not need_fvg:
+                    zones_b.append([l[ob_idx], h[ob_idx], i, True])
+        if sw_lo is not None and not broke_lo and c[i] < sw_lo:
+            broke_lo = True
+            j0 = max(0, i - lookback)
+            hi_idx = j0 + int(np.argmax(h[j0:i + 1]))
+            ob_idx = next((j for j in range(hi_idx, max(j0, hi_idx - 5) - 1, -1) if c[j] > o[j]), None)
+            if ob_idx is not None:
+                fvg = any(h[m] < l[m - 2] for m in range(ob_idx + 2, i + 1))
+                if fvg or not need_fvg:
+                    zones_s.append([l[ob_idx], h[ob_idx], i, True])
+    return buy, sell
 
 
 def signals(df: pd.DataFrame) -> dict[str, np.ndarray]:
@@ -71,6 +143,8 @@ def signals(df: pd.DataFrame) -> dict[str, np.ndarray]:
         "S1": rsi_dn & dn, "S2": (r2 > 90) & dn, "S3": bb_up & dn,
         "S5": (c.close < ll50) & dn, "S6": bb_up,
     }
+    out["B10"] = (p.close <= p.sma50) & (c.close > c.sma50) & (c.sma50 > c.sma200)
+    out["S10"] = (p.close >= p.sma50) & (c.close < c.sma50) & (c.sma50 < c.sma200)
     out["B4"] = out["B1"] | out["B2"] | out["B3"]
     out["S4"] = out["S1"] | out["S2"] | out["S3"]
     d = {k: df[k].to_numpy(float) for k in df.columns}
@@ -82,6 +156,12 @@ def signals(df: pd.DataFrame) -> dict[str, np.ndarray]:
         s0[i] = se and ss >= 5
     out = {k: v.fillna(False).to_numpy() if hasattr(v, "fillna") else v for k, v in out.items()}
     out["B0"], out["S0"] = b0, s0
+    ob_b, ob_s = order_blocks(df, need_fvg=True)
+    ob_b2, ob_s2 = order_blocks(df, need_fvg=False)
+    upn, dnn = up.to_numpy(), dn.to_numpy()
+    out["B7"], out["S7"] = ob_b, ob_s
+    out["B8"], out["S8"] = ob_b2, ob_s2
+    out["B9"], out["S9"] = ob_b & upn, ob_s & dnn
     return out
 
 
@@ -102,7 +182,7 @@ def run_asset(sym: str, cls: str):
             base[(per, h)] = float(r.mean()) if len(r) else 0.0
     rows = []
     for key, arr in signals(df).items():
-        side = 1 if key[0] == "B" else -1
+        side = 1 if key.startswith("B") else -1
         last = -10**9
         for i in np.flatnonzero(arr):
             if i < 201 or not valid[i] or i - last < COOLDOWN:
