@@ -342,7 +342,25 @@ def bias_of(row) -> tuple[str, int]:
     return label, pts
 
 
-def backtest(d: dict[str, np.ndarray], n: int, tf: str, thresholds: tuple[int, int]):
+
+def rsi_rebound(d: dict[str, np.ndarray], i: int) -> bool:
+    """Le RSI 14 repasse au-dessus de 30 (sortie de survente)."""
+    r0, r1 = float(d["rsi"][i - 1]), float(d["rsi"][i])
+    return _ok(r0, r1) and r0 < 30 <= r1
+
+
+def fires(d, i, side, sc, ev, thr, buy_rule):
+    """Déclenchement d'un signal. À l'achat, deux règles :
+    - "rsi"   : sortie de survente du RSI 14 (retenue pour actions, ETF et indices : seule règle positive
+                sur les deux périodes du backtest de stratégies du 2 octobre 2026) ;
+    - "score" : score de confluence ≥ seuil (ancienne règle).
+    À la vente : score de confluence ≥ seuil."""
+    if side == "buy" and buy_rule == "rsi":
+        return rsi_rebound(d, i)
+    return ev and sc >= thr
+
+
+def backtest(d: dict[str, np.ndarray], n: int, tf: str, thresholds: tuple[int, int], buy_rule: str = "score"):
     """Rejoue le signal sur l'historique : que s'est-il passé H bougies après chaque signal ?"""
     H = HORIZON[tf]
     close = d["close"]
@@ -352,7 +370,7 @@ def backtest(d: dict[str, np.ndarray], n: int, tf: str, thresholds: tuple[int, i
     for i in range(start, n):
         bs, _, be, ss, _, se = score_at(d, i)
         for side, sc, ev, threshold in (("buy", bs, be, thresholds[0]), ("sell", ss, se, thresholds[1])):
-            if ev and sc >= threshold and i - last[side] >= COOLDOWN_BARS:
+            if fires(d, i, side, sc, ev, threshold, buy_rule) and i - last[side] >= COOLDOWN_BARS:
                 last[side] = i
                 if i + H < n:
                     res[side].append(close[i + H] / close[i] - 1)
@@ -371,7 +389,7 @@ def backtest(d: dict[str, np.ndarray], n: int, tf: str, thresholds: tuple[int, i
 
 
 def history_1y(df: pd.DataFrame, d: dict[str, np.ndarray], n_closed: int, tf: str,
-               thr: tuple[int, int], mode: str) -> tuple[list, list]:
+               thr: tuple[int, int], mode: str, buy_rule: str = "score") -> tuple[list, list]:
     """Signaux que Radar aurait envoyés sur les 365 derniers jours (bougies clôturées, réglage actuel)."""
     H = HORIZON[tf]
     close = d["close"]
@@ -383,7 +401,7 @@ def history_1y(df: pd.DataFrame, d: dict[str, np.ndarray], n_closed: int, tf: st
             continue
         bs, br, be, ss, sr, se = score_at(d, i)
         for side, sc, ev, reasons, t in (("buy", bs, be, br, thr[0]), ("sell", ss, se, sr, thr[1])):
-            if mode not in (side, "both") or not ev or sc < t or i - last[side] < COOLDOWN_BARS:
+            if mode not in (side, "both") or not fires(d, i, side, sc, ev, t, buy_rule) or i - last[side] < COOLDOWN_BARS:
                 continue
             last[side] = i
             j = min(i + H, len(close) - 1)
@@ -479,8 +497,15 @@ def analyse(asset: dict, prev_state: dict, settings: dict):
     bs, br, be, ss, sr, se = score_at(d, i)
     row = df.iloc[i]
     bias, bias_pts = bias_of(row)
-    bt = backtest(d, n_closed, tf, (thr_b, thr_s))
-    hist, curve = history_1y(df, d, n_closed, tf, (thr_b, thr_s), mode)
+    # Règle d'achat : RSI pour actions/ETF/indices ; pour les cryptos, choix de l'utilisateur
+    # (réglage global "crypto_buy" : "score" par défaut, "rsi" ou "off").
+    crypto_buy = settings.get("crypto_buy", "score")
+    buy_rule = (crypto_buy if crypto_buy in ("score", "rsi") else "off") if is_crypto else "rsi"
+    eff_mode = mode
+    if buy_rule == "off" and mode in ("buy", "both"):
+        eff_mode = "sell" if mode == "both" else "off"
+    bt = backtest(d, n_closed, tf, (thr_b, thr_s), buy_rule if buy_rule != "off" else "score")
+    hist, curve = history_1y(df, d, n_closed, tf, (thr_b, thr_s), eff_mode, buy_rule)
 
     bar_ts = df.index[i].isoformat()
     atr = float(row["atr"]) if _ok(float(row["atr"])) else None
@@ -506,16 +531,18 @@ def analyse(asset: dict, prev_state: dict, settings: dict):
 
     # --- signaux techniques (bougie clôturée)
     for side, sc, reasons, ev in (("buy", bs, br, be), ("sell", ss, sr, se)):
-        if mode not in (side, "both"):
+        if eff_mode not in (side, "both"):
             continue
         key = f"last_{side}"
         thr = thr_b if side == "buy" else thr_s
-        if ev and sc >= thr and st.get(key) != bar_ts and bars_since(st.get(key)) >= COOLDOWN_BARS:
+        if fires(d, i, side, sc, ev, thr, buy_rule) and st.get(key) != bar_ts and bars_since(st.get(key)) >= COOLDOWN_BARS:
             st[key] = bar_ts
-            strength = "fort" if sc >= thr + 2 else "modéré"
+            rsi_rule = side == "buy" and buy_rule == "rsi"
+            strength = ("fort" if sc >= 4 else "modéré") if rsi_rule else ("fort" if sc >= thr + 2 else "modéré")
             cl = float(row["close"])
-            lines = [f"Signal {strength} · score {sc} · bougie {TF_LABEL[tf]}",
-                     f"Clôture {fprice(cl, cur)}"]
+            head_line = (f"Rebond de survente · RSI {fnum(float(row['rsi']), 0)} · bougie {TF_LABEL[tf]}" if rsi_rule
+                         else f"Signal {strength} · score {sc} · bougie {TF_LABEL[tf]}")
+            lines = [head_line, f"Clôture {fprice(cl, cur)}"]
             lines += [f"• {r}" for r in reasons]
             if atr:
                 if side == "buy":
@@ -569,6 +596,9 @@ def analyse(asset: dict, prev_state: dict, settings: dict):
         "ok": True, "symbol": sym, "source_symbol": used, "name": name, "long_name": long_name, "currency": cur,
         "type": "crypto" if is_crypto else (asset.get("type") or (qtype or "").lower()),
         "tf": tf, "sensitivity": sens, "threshold": thr_b, "threshold_buy": thr_b, "threshold_sell": thr_s, "alert": mode,
+        "buy_rule": buy_rule,
+        "signal_buy": bool(eff_mode in ("buy", "both") and fires(d, i, "buy", bs, be, thr_b, buy_rule)),
+        "signal_sell": bool(eff_mode in ("sell", "both") and fires(d, i, "sell", ss, se, thr_s, buy_rule)),
         "price": price, "change": (price / prev_close - 1) * 100,
         "bar": bar_ts, "bar_closed": bool(closed_mask[-1]),
         "bias": bias, "bias_pts": bias_pts,
