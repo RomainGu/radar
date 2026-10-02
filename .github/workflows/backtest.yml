@@ -6,8 +6,8 @@ on:
       mode:
         description: "Quel test lancer"
         type: choice
-        options: [indicateurs, classes]
-        default: classes
+        options: [strategies, classes, indicateurs]
+        default: strategies
 
 permissions:
   contents: read
@@ -29,10 +29,15 @@ jobs:
           BT_OUT: bt-out
         run: python engine/backtest.py
       - name: Réglages par classe d'actif (hors échantillon)
-        if: ${{ github.event.inputs.mode != 'indicateurs' }}
+        if: ${{ github.event.inputs.mode == 'classes' }}
         env:
           BT_OUT: bt-out
         run: python engine/backtest_classes.py
+      - name: Stratégies simples contre le score actuel
+        if: ${{ github.event.inputs.mode == 'strategies' || github.event.inputs.mode == '' }}
+        env:
+          BT_OUT: bt-out
+        run: python engine/backtest_strategies.py
       - uses: actions/upload-artifact@v4
         with:
           name: backtest
