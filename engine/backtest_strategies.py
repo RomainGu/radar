@@ -277,6 +277,16 @@ def main():
                 cells.append("—" if not s["n"] or np.isnan(s["x"]) else f"{s['n']} · {s['win']:.0f} % · {s['x']:+.2f} % ({s['t']:+.1f})")
             w(f"| {k} | " + " | ".join(cells) + " |")
 
+    w("\n## Contrôle par classe et par période (20 séances)\n")
+    w("| Stratégie | Classe | A : n · réussite · excès (t) | B : n · réussite · excès (t) |")
+    w("|---|---|---|---|")
+    for k in ("B0", "B1", "B6", "S0", "S1", "S3", "S6"):
+        for c in UNIVERSE:
+            cells = []
+            for per in ("A", "B"):
+                s_ = st(df[(df.strat == k) & (df.cls == c) & (df.per == per)], 20)
+                cells.append("—" if not s_["n"] or np.isnan(s_["x"]) else f"{s_['n']} · {s_['win']:.0f} % · {s_['x']:+.2f} % ({s_['t']:+.1f})")
+            w(f"| {k} | {c} | {cells[0]} | {cells[1]} |")
     report = "\n".join(L)
     out = Path(os.environ.get("BT_OUT", "bt-out"))
     out.mkdir(parents=True, exist_ok=True)
