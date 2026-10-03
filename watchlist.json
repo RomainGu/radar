@@ -203,7 +203,7 @@
       "type": "action",
       "alert": "sell",
       "timeframe": "1d",
-      "sensitivity": "normal"
+      "sensitivity": "reactif"
     },
     {
       "symbol": "CW8.PA",
