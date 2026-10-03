@@ -219,7 +219,7 @@
       "type": "etf",
       "alert": "both",
       "timeframe": "1d",
-      "sensitivity": "normal"
+      "sensitivity": "reactif"
     }
   ]
 }
