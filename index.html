@@ -341,7 +341,7 @@ function demo() {
       reasons_buy: opts.rb || ["Tendance de fond haussière (au-dessus de la MM200)"], reasons_sell: opts.rs || ["Contre-tendance : le fond reste haussier"],
       ind: { rsi: opts.rsi ?? 52, macd: .4, macd_sig: .3, macd_hist: .1, sma50: price * .97, sma200: price * (opts.d200 ?? .92), pctb: opts.pctb ?? .55, stoch_k: 48, stoch_d: 45, atr: price * .021, atr_pct: 2.1, vol_ratio: 1.1, dist_sma200: (1 / (opts.d200 ?? .92) - 1) * 100 },
       range: { high: Math.max(...spark) * 1.04, low: Math.min(...spark) * .9, pos: opts.pos ?? 62, from_high: opts.fh ?? -8.4 },
-      position: opts.entry ? { entry: opts.entry, pnl: (price / opts.entry - 1) * 100 } : null,
+      position: opts.entry ? { entry: opts.entry, pnl: (price / opts.entry - 1) * 100, rsi: opts.rsi ?? 52, exit_hit: !!opts.exitHit } : null,
       backtest: { horizon: 20, horizon_label: "20 séances", baseline: 1.6, buy: { n: opts.bn ?? 9, win: opts.bw ?? 67, avg: opts.ba ?? 4.2 }, sell: { n: 7, win: 57, avg: -1.9 } },
       spark, updated: new Date().toISOString(),
       curve: (() => { const out = [[Math.floor(Date.now() / 60000), price]]; let q = price; const now = out[0][0]; for (let i = 1; i <= 250; i++) { q /= 1 + (rnd() - .5) * vol + drift; out.unshift([now - i * 1440 * 1.45, +q.toPrecision(6)]); } return out; })(),
@@ -570,7 +570,8 @@ function vAsset(sym) {
   <div class="group">${btRow("buy", "Achats")}${btRow("sell", "Ventes")}</div>
   <p class="note">Rejeu du même signal, avec ta sensibilité, sur l'historique de cet actif. À comparer à la variation moyenne « sans signal » : ${pct(bt.baseline)} à ${esc(bt.horizon_label || "")}. Les performances passées ne préjugent pas des performances futures.</p>
 
-  ${pos ? `<h2>Ma position</h2><div class="group"><div class="kv"><span class="k">Prix d'entrée</span><span class="v num">${money(pos.entry, s.currency)}</span></div><div class="kv"><span class="k">Plus ou moins-value</span><span class="v num" style="font-weight:600;color:${pos.pnl >= 0 ? "var(--buy)" : "var(--sell)"}">${pct(pos.pnl)}</span></div><div class="kv"><span class="k">Stop indicatif (2 × ATR)</span><span class="v num">${money(s.price - 2 * (i.atr || 0), s.currency)}</span></div></div>` : ""}
+  ${pos ? `<h2>Ma position</h2><div class="group"><div class="kv"><span class="k">Prix d'entrée</span><span class="v num">${money(pos.entry, s.currency)}</span></div><div class="kv"><span class="k">Plus ou moins-value</span><span class="v num" style="font-weight:600;color:${pos.pnl >= 0 ? "var(--buy)" : "var(--sell)"}">${pct(pos.pnl)}</span></div><div class="kv"><span class="k">Stop indicatif (2 × ATR)</span><span class="v num">${money(s.price - 2 * (i.atr || 0), s.currency)}</span></div>
+  <div class="kv"><span class="k">Sortie suggérée (RSI 60)</span><span class="v">${(pos.exit_hit || (pos.rsi ?? i.rsi) >= 60) ? `<span style="font-weight:600;color:var(--sell)">Atteinte : envisage la vente</span>` : `<span class="num">RSI ${nf(pos.rsi ?? i.rsi, 0)} / 60</span>`}<small>${(pos.exit_hit || (pos.rsi ?? i.rsi) >= 60) ? "le rebond attendu a eu lieu" : "alerte quand le RSI remonte à 60"}</small></span></div></div>` : ""}
 
   <div style="margin-top:24px">${wa ? `<button class="btn ghost" onclick="openEditor('${esc(sym)}')">Modifier les alertes de cet actif</button>` : ""}</div>`;
 }
@@ -650,7 +651,7 @@ function vAlerts() {
   const groups = {};
   list.forEach(a => { const d = new Date(a.at).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }); (groups[d] ||= []).push(a); });
   const body = list.length ? Object.entries(groups).map(([d, arr]) => `<h2>${cap(d)}</h2><div class="group">${arr.map(a => `
-      <details class="alert ${a.side}"><summary style="list-style:none;cursor:pointer"><div class="t">${esc(a.title)}</div><div class="w">${new Date(a.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} · ${a.kind === "signal" ? "signal technique" : a.kind === "stop" ? "stop" : "niveau de prix"}</div></summary><pre>${esc(a.body)}</pre>
+      <details class="alert ${a.side}"><summary style="list-style:none;cursor:pointer"><div class="t">${esc(a.title)}</div><div class="w">${new Date(a.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} · ${a.kind === "signal" ? "signal technique" : a.kind === "stop" ? "stop" : a.kind === "exit" ? "sortie de position" : "niveau de prix"}</div></summary><pre>${esc(a.body)}</pre>
       <button class="linkbtn" style="padding:8px 0 0" onclick="go('#asset/${encodeURIComponent(a.symbol)}')">Voir l'actif</button></details>`).join("")}</div>`).join("")
     : `<div class="group" style="margin-top:16px"><div class="empty"><b>Aucune alerte ${f === "buy" ? "d'achat " : f === "sell" ? "de vente " : ""}reçue pour l'instant</b>Elles apparaissent ici en même temps que la notification sur ton téléphone. L'historique sur un an montre ce que Radar aurait envoyé.</div></div>`;
   return top + views + seg + body;
@@ -872,7 +873,7 @@ function renderEditor() {
       <div class="field"><label for="f-en">Prix d'entrée</label><input id="f-en" inputmode="decimal" value="${num(d.entry)}" placeholder="si tu détiens" oninput="draft.entry=pnum(this.value)"></div>
       <div class="field"><label for="f-st">Stop</label><input id="f-st" inputmode="decimal" value="${num(d.stop)}" placeholder="alerte si ≤" oninput="draft.stop=pnum(this.value)"></div>
     </div>
-    <div class="field"><div class="help" style="margin:0">Ces niveaux sont surveillés à chaque analyse, en plus des indicateurs. Le prix d'entrée affiche ta plus ou moins-value.</div></div>
+    <div class="field"><div class="help" style="margin:0">Ces niveaux sont surveillés à chaque analyse, en plus des indicateurs. Le prix d'entrée affiche ta plus ou moins-value et active l'alerte de sortie (RSI 60), la règle la plus fiable au backtest.</div></div>
   </div>
   ${draftOrig ? `<div style="margin-top:24px"><button class="btn danger" onclick="removeAsset()">Retirer ${esc(d.name || d.symbol)} de la liste</button></div>` : ""}`;
 }
