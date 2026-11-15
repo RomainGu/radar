@@ -6,8 +6,8 @@ on:
       mode:
         description: "Quel test lancer"
         type: choice
-        options: [strategies, classes, indicateurs]
-        default: strategies
+        options: [sorties, strategies, classes, indicateurs]
+        default: sorties
 
 permissions:
   contents: read
@@ -34,10 +34,15 @@ jobs:
           BT_OUT: bt-out
         run: python engine/backtest_classes.py
       - name: Stratégies simples contre le score actuel
-        if: ${{ github.event.inputs.mode == 'strategies' || github.event.inputs.mode == '' }}
+        if: ${{ github.event.inputs.mode == 'strategies' }}
         env:
           BT_OUT: bt-out
         run: python engine/backtest_strategies.py
+      - name: Règles de sortie (gestion du trade)
+        if: ${{ github.event.inputs.mode == 'sorties' || github.event.inputs.mode == '' }}
+        env:
+          BT_OUT: bt-out
+        run: python engine/backtest_exits.py
       - uses: actions/upload-artifact@v4
         with:
           name: backtest
