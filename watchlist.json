@@ -182,7 +182,7 @@
       "sensitivity": "reactif"
     },
     {
-      "symbol": "STM.PA",
+      "symbol": "STMPA.PA",
       "name": "STMicroelectronics NV",
       "type": "action",
       "alert": "both",
