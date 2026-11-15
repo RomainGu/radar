@@ -547,6 +547,8 @@ def analyse(asset: dict, prev_state: dict, settings: dict):
             if atr:
                 if side == "buy":
                     lines.append(f"Stop indicatif : {fprice(cl - 2 * atr, cur)} (2 × ATR)")
+                    lines.append("Sortie suggérée : quand le RSI 14 remonte à 60 "
+                                 "(règle validée au backtest, renseigne ton prix d'entrée pour être alerté)")
                 else:
                     lines.append(f"Invalidation si retour au-dessus de {fprice(cl + 2 * atr, cur)}")
             lines.append(fiab(side))
@@ -581,6 +583,32 @@ def analyse(asset: dict, prev_state: dict, settings: dict):
         elif rearm and st.get(fkey):
             st.pop(fkey, None)
 
+    # --- sortie de position (RSI 60) : si un prix d'entrée est renseigné, on alerte quand
+    # le RSI 14 de la dernière bougie clôturée atteint 60. Règle validée au backtest du
+    # 15 novembre 2026 (meilleure sortie sur les deux périodes, toutes classes).
+    entry0 = asset.get("entry")
+    rsi_now = float(row["rsi"]) if _ok(float(row["rsi"])) else None
+    if entry0 not in (None, "", 0) and mode != "off" and rsi_now is not None:
+        if st.get("exit_entry") != float(entry0):          # nouvelle position : on réarme
+            st["exit_entry"] = float(entry0)
+            st.pop("fired_rsi60", None)
+        pnl0 = (float(row["close"]) / float(entry0) - 1) * 100
+        if rsi_now >= 60 and not st.get("fired_rsi60"):
+            st["fired_rsi60"] = bar_ts
+            alerts.append({
+                "symbol": sym, "name": name, "side": "sell", "kind": "exit",
+                "price": float(row["close"]), "currency": cur, "bar": bar_ts, "tf": tf,
+                "title": f"Sortie suggérée · {head}",
+                "body": (f"Le RSI 14 atteint {fnum(rsi_now, 0)} : le rebond attendu a eu lieu.\n"
+                         f"Clôture {fprice(float(row['close']), cur)} · entrée {fprice(float(entry0), cur)} "
+                         f"({pct(pnl0)})\n"
+                         "Règle de sortie validée au backtest (56 actifs, 2 périodes) : "
+                         "vendre quand le RSI remonte à 60 après l'achat."),
+                "priority": 4, "tag": "exit",
+            })
+        elif rsi_now < 45 and st.get("fired_rsi60"):
+            st.pop("fired_rsi60", None)                    # réarmement après un vrai repli
+
     # --- données pour l'appli
     look = 252 if tf == "1d" else (52 if tf == "1wk" else 6 * 7 * 5)
     win = df.iloc[-look:]
@@ -614,7 +642,8 @@ def analyse(asset: dict, prev_state: dict, settings: dict):
         },
         "range": {"high": hi, "low": lo, "pos": (price - lo) / (hi - lo) * 100 if hi > lo else None,
                   "from_high": (price / hi - 1) * 100},
-        "position": ({"entry": float(entry), "pnl": (price / float(entry) - 1) * 100} if entry else None),
+        "position": ({"entry": float(entry), "pnl": (price / float(entry) - 1) * 100,
+                      "rsi": rv("rsi"), "exit_hit": bool(st.get("fired_rsi60"))} if entry else None),
         "backtest": bt,
         "spark": spark,
         "history": hist,
